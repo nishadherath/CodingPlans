@@ -1,2 +1,11 @@
-# Auto detect text files and perform LF normalization
+# Auto detect text files and perform LF normalization.
+#
+# The repo is authored with LF. `* text=auto` normalises to LF in the index and
+# lets Git convert on checkout per core.autocrlf, which is what we want for
+# source. The generated bundle is additionally pinned to LF: dist/coding-plans.mjs
+# is a build artefact that must be byte-reproducible from `npm run build:dist`,
+# and CRLF there would make local builds differ from committed output.
 * text=auto
+dist/*.mjs text eol=lf
+*.sh text eol=lf
+

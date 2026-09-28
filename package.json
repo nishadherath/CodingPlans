@@ -1,0 +1,37 @@
+{
+  "name": "cline-coding-plans",
+  "version": "0.1.0",
+  "description": "Install, repair and verify CLI-backed coding-plan providers (Claude Code, OpenAI Codex) for Cline, on any platform.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "coding-plans": "./bin/coding-plans.mjs"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:live": "node --test --test-concurrency=1 test/live.test.mjs",
+    "build:dist": "node scripts/build-dist.mjs",
+    "doctor": "node bin/coding-plans.mjs doctor"
+  },
+  "keywords": [
+    "cline",
+    "claude-code",
+    "openai-codex",
+    "provider",
+    "setup",
+    "diagnostics"
+  ]
+}

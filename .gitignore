@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+
+# dist/ is intentionally NOT ignored.
+# The single-file bundle is a stated deliverable of this project — it is the
+# artefact people copy onto a machine with no npm, so it is versioned and
+# rebuilt by `npm run build:dist`.
