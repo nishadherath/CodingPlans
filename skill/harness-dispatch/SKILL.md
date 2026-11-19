@@ -16,6 +16,9 @@ Run the script with Node 22 or later. Use the folder that holds this file:
 node "<folder of this file>/scripts/hd.mjs" <command> [options]
 ```
 
+If you do not know the folder of this file, find `harness-dispatch/scripts/hd.mjs` in one of these folders:
+`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills`, `~/.config/opencode/skill`, `~/.zcode/skills`, `~/.agents/skills`.
+
 Use it when:
 - the operator asks you to dispatch, delegate or hand over a task;
 - you need a second opinion from a model of a different vendor;
@@ -39,10 +42,10 @@ Options of `run`: `--model <id>`, `--effort <low|medium|high|xhigh|max>`, `--acc
 Examples. Put the brief in a file and use `--prompt-file`. Use stdin only when you pipe the text yourself:
 
 ```
-node hd.mjs run --to claude --prompt-file brief.md --model sonnet --effort high
-node hd.mjs run --to codex --prompt-file brief.md --cwd ./repo --schema answer.schema.json
-node hd.mjs run --to antigravity --prompt-file brief.md --model gemini-4-neon-high
-node hd.mjs run --to codex --resume <session_id> --prompt "Now check the tests too."
+node "<folder of this file>/scripts/hd.mjs" run --to claude --prompt-file brief.md --model sonnet --effort high
+node "<folder of this file>/scripts/hd.mjs" run --to codex --prompt-file brief.md --cwd ./repo --schema answer.schema.json
+node "<folder of this file>/scripts/hd.mjs" run --to antigravity --prompt-file brief.md --model gemini-4-neon-high
+node "<folder of this file>/scripts/hd.mjs" run --to codex --resume <session_id> --prompt "Now check the tests too."
 ```
 
 Codex does not accept `--effort max`. Antigravity limits the prompt to 24,000 characters.
@@ -57,7 +60,7 @@ The other agent knows nothing about your conversation. Write a brief that stands
 4. The test that proves completion.
 5. The shape of the answer, for example "Reply with a list of defects, one line each."
 
-Do not put secrets in a prompt. The prompt and the output are stored in a log file.
+Do not put secrets in a prompt. The target keeps its own session history, and `hd` keeps the target output in a log file.
 
 ## Read the result
 
