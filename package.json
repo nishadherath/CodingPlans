@@ -1,7 +1,7 @@
 {
   "name": "cline-coding-plans",
   "version": "0.1.0",
-  "description": "Install, repair and verify CLI-backed coding-plan providers (Claude Code, OpenAI Codex) for Cline, on any platform.",
+  "description": "harness-dispatch: a portable skill that sends a task from one coding agent CLI to another (Claude Code, OpenAI Codex, Google Antigravity) and returns one JSON result. Also holds the legacy Cline provider repair tool.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

@@ -19,7 +19,7 @@
 
 import { accessSync, constants, existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { run, tryRun } from "../util/exec.mjs";
 
 const isWindows = process.platform === "win32";
@@ -32,7 +32,10 @@ function candidateSuffixes() {
 }
 
 function pathEntries(env = process.env) {
-	return (env.PATH ?? env.Path ?? "").split(delimiter).filter(Boolean);
+	// Only absolute entries count. A relative entry such as "." would give a
+	// relative command, and spawn would then search the working directory of
+	// the target: a file named like the CLI in a repository could start.
+	return (env.PATH ?? env.Path ?? "").split(delimiter).filter((entry) => entry && isAbsolute(entry));
 }
 
 /** Absolute path of a bare-spawnable executable on PATH, or undefined. */

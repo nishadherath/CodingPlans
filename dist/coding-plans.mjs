@@ -4,7 +4,7 @@
 import * as __imp_0_node_child_process from "node:child_process";
 const { spawn } = __imp_0_node_child_process;
 import * as __imp_1_node_path from "node:path";
-const { join, delimiter, dirname, resolve } = __imp_1_node_path;
+const { join, delimiter, dirname, isAbsolute, resolve } = __imp_1_node_path;
 import * as __imp_2_node_fs from "node:fs";
 const { accessSync, constants, existsSync, readdirSync, statSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } = __imp_2_node_fs;
 import * as __imp_3_node_os from "node:os";
@@ -340,7 +340,10 @@ function candidateSuffixes() {
 }
 
 function pathEntries(env = process.env) {
-	return (env.PATH ?? env.Path ?? "").split(delimiter).filter(Boolean);
+	// Only absolute entries count. A relative entry such as "." would give a
+	// relative command, and spawn would then search the working directory of
+	// the target: a file named like the CLI in a repository could start.
+	return (env.PATH ?? env.Path ?? "").split(delimiter).filter((entry) => entry && isAbsolute(entry));
 }
 
 /** Absolute path of a bare-spawnable executable on PATH, or undefined. */

@@ -215,3 +215,23 @@ test("resolveNamed uses the extra folders and the home of the given environment"
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+test("resolveNamed ignores a relative PATH entry", () => {
+	// Acceptance defect D8: PATH "." gave a relative command, and spawn then
+	// searched the working directory of the target.
+	const name = `hd-relpath-${process.pid}`;
+	const file = join(process.cwd(), isWindows ? `${name}.exe` : name);
+	writeFileSync(file, "x", isWindows ? undefined : { mode: 0o755 });
+	try {
+		const home = mkdtempSync(join(tmpdir(), "hd-core-"));
+		try {
+			assert.equal(resolveNamed(name, { PATH: ".", USERPROFILE: home, HOME: home }), undefined);
+			const found = resolveNamed(name, { PATH: process.cwd(), USERPROFILE: home, HOME: home });
+			assert.equal(found?.command, file);
+		} finally {
+			rmSync(home, { recursive: true, force: true });
+		}
+	} finally {
+		rmSync(file, { force: true });
+	}
+});

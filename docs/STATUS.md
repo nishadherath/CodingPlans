@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20, after H2, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,33 +12,37 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-H1 is complete and passes its oracle. H2 (acceptance) is prepared. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
+H1 (build) and H2 (acceptance) are complete. Verdict of H2: **accept with listed defects**. No defect blocks an install on this Windows machine. One real dispatch to Antigravity passed through the skill bundle. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
 
 ## Completed
 
 | Stage | Result | Cost (API list price) |
 |---|---|---|
-| 0. Assessment | `docs/analysis/2026-11-20-project-assessment.md` | 6.39 USD measured at 13 calls |
-| 0. Project configuration | `AGENTS.md`, `CLAUDE.md`, this file | Included in the hub session |
-| 0. Contract and dispatch decision | `docs/design/harness-dispatch-contract.md`, `docs/handoffs/2026-11-20-h1-harness-dispatch-build.md` | Hub session, not yet measured |
+| 0. Assessment and configuration | `docs/analysis/2026-11-20-project-assessment.md`, `AGENTS.md`, `CLAUDE.md` | In the hub figure |
+| 0. Contract and dispatch decision | `docs/design/harness-dispatch-contract.md`, `docs/handoffs/2026-11-20-h1-harness-dispatch-build.md` | In the hub figure |
+| H1. Build | Engine, three adapters, CLI, bundle `skill/harness-dispatch/scripts/hd.mjs`, skill file, installer, legacy defects D1 and D2. Note: `docs/handoffs/2026-11-20-h1-result.md`. | 4.54 USD measured (78 calls). Projected 14.28. |
+| H2. Acceptance | 9 defects found, 5 corrected by H2, 1 corrected by the hub (D8), 3 open (D6, D7, D9). Result: `docs/handoffs/2026-11-20-h2-result.md`. | 4.70 USD measured (53 calls). Projected 8.00. |
+| Live dispatch | `hd run --to antigravity --access read`: exit code 0, `ok` true, 23,580 tokens, 54 seconds | Plan quota of Antigravity |
+| Hub | Assessment, contract, handoffs, probes, coordination | 13.91 USD measured (52 calls) |
 
-| H1. Build | Commits `436f612` to `0d41728`: engine, three adapters, CLI, bundle `skill/harness-dispatch/scripts/hd.mjs`, skill file, installer, legacy defects D1 and D2. Hub oracle on 2026-11-20: 123 tests pass, 0 fail, 8 skipped; bundles current; guard and installer dry run correct. | Projected 14.28 USD. Not yet measured. |
+Total measured: 23.15 USD. Tests at the head: 139 tests, 131 pass, 0 fail, 8 skipped. Bundles are current.
 
 ## In progress
 
-| Stage | Work | Model | Effort | Approved | Estimated time | Estimated cost USD |
-|---|---|---|---|---|---|---|
-| H2 | Adversarial acceptance. Handoff: `docs/handoffs/2026-11-20-h2-harness-dispatch-acceptance.md`. One live dispatch to `agy` is a gate. | `claude-opus-5-5` | high | Yes | 45 min | 8.00 |
+None.
 
 ## Remaining
 
-| Stage | Work | Model | Effort | Approved | Estimated time | Estimated cost USD |
-|---|---|---|---|---|---|---|
-| Hub | Coordination of H1 and H2 | `claude-fable-5-2` | high | Yes | In the stages | about 6.92 |
-| Later | Install the skill (operator). Targets ZCode, OpenCode, Cline. `stream-json` sessions for `agy`. | not decided | | No | | |
-| Deferred | Cline provider repair: assessment section 7, stages 2 to 5 | not decided | | No | | |
-
-Plan total for H1 and H2 with coordination: about 29.34 USD and about 2 hours 35 minutes of model time. The estimates have no measurement from this project.
+| Item | Work | Needs |
+|---|---|---|
+| Install | Run `node scripts/install-skill.mjs --apply` (all harness folders that exist) or with `--target <id>` | The operator |
+| D9 | Make the read access of `claude` independent of the allow rules in the settings | An operator decision and one live probe after `claude auth login` |
+| D6, D7 | POSIX: stop the target when the caller stops `hd`; per-user log folder | A POSIX machine for the test run |
+| Real success fixtures | `claude` and `codex` success output is still synthetic in the tests | `claude auth login`; a Codex model that the account accepts |
+| Not verified | `--resume`, `--schema` and `--access write` on a real target | Operator approval for live runs |
+| Later targets | ZCode, OpenCode, Cline. `stream-json` sessions for `agy`. | Not planned yet |
+| Deferred | Cline provider repair: assessment section 7 | Not planned yet |
+| Merge | Merge `feat/harness-dispatch` to `main`, push | The operator |
 
 ## Open decisions and gates
 
