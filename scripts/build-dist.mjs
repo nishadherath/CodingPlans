@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Produce a single-file, dependency-free redistributable.
+// Produce single-file, dependency-free redistributables.
 //
 // Why bundle: the package is plain ESM with zero runtime dependencies, so
 // inlining it into one .mjs removes the install step, node_modules resolution,
@@ -10,12 +10,30 @@
 // Namespacing (rather than naive concatenation) matters here: several modules
 // each declare a module-local `isWindows`, so a flat concatenation would
 // silently shadow. `node:fs` & friends are left as real imports.
+//
+// Three outputs:
+//   dist/coding-plans.mjs                    library bundle of src/index.mjs
+//   dist/cli.mjs                             the legacy CLI, pointed at the bundle
+//   skill/harness-dispatch/scripts/hd.mjs    the dispatch skill script
+//
+// `node scripts/build-dist.mjs --check` writes nothing. It exits 1 when a
+// committed output differs from what the sources would build.
+//
+// Supported module syntax: named imports and exports, `import * as`,
+// `import x from` (relative), `export { a } from`, and `export default <name>;`
+// (an identifier on its own line). Not supported: `export *`, computed
+// default expressions, default imports of `node:*` modules.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Sources may have CRLF line endings on Windows. The bundles are pinned to LF
+// (.gitattributes), so every read is normalised. Then the output is the same
+// on every machine.
+const readSource = (file) => readFileSync(file, "utf8").replace(/\r\n/g, "\n");
 
 // Specifier bodies must not contain `}`; using [\s\S]*? lets a match run
 // across several import statements and swallow unrelated text.
@@ -24,6 +42,7 @@ const IMPORT_STAR = /^[ \t]*import\s*\*\s*as\s+([A-Za-z0-9_$]+)\s+from\s*["'](\.
 const IMPORT_DEFAULT = /^[ \t]*import\s+([A-Za-z0-9_$]+)\s*,?\s*from\s*["'](\.[^"']+)["'];?[ \t]*$/gm;
 const EXPORT_FROM = /^[ \t]*export\s*\{([^}]*)\}\s*from\s*["'](\.[^"']+)["'];?[ \t]*$/gm;
 const EXPORT_DECL = /^[ \t]*export\s+(?:async\s+function|function|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm;
+const EXPORT_DEFAULT = /^[ \t]*export\s+default\s+([A-Za-z0-9_$]+);?[ \t]*$/gm;
 const EXPORT_LIST = /^[ \t]*export\s*\{([^}]*)\};?[ \t]*$/gm;
 
 function resolveRelative(fromFile, spec) {
@@ -50,7 +69,7 @@ function parseSpecifiers(inner) {
 }
 
 function transform(file) {
-	let source = readFileSync(file, "utf8");
+	let source = readSource(file);
 	const exported = new Set();
 
 	// Only RELATIVE imports are rewritten. `node:*` and bare specifiers are
@@ -69,7 +88,6 @@ function transform(file) {
 
 	source = source.replace(IMPORT_DEFAULT, (m, local, spec) => {
 		if (!isRelative(spec)) return m;
-		exported.add(local);
 		return `const ${local} = ${nsName(resolveRelative(file, spec))}.default;`;
 	});
 
@@ -85,6 +103,12 @@ function transform(file) {
 	source = source.replace(EXPORT_DECL, (m, name) => {
 		exported.add(name);
 		return m.replace(/export\s+/, "");
+	});
+
+	// `export default name;` becomes `default: name` in the module's return object.
+	source = source.replace(EXPORT_DEFAULT, (m, name) => {
+		exported.add(`default: ${name}`);
+		return "";
 	});
 
 	source = source.replace(EXPORT_LIST, (m, inner) => {
@@ -109,7 +133,7 @@ function collect(entry) {
 		// Dependencies must be read from the ORIGINAL source: `transform`
 		// rewrites `from "./x"` into a bare namespace reference, so scanning
 		// the transformed text finds nothing to recurse into.
-		const original = readFileSync(file, "utf8");
+		const original = readSource(file);
 		for (const spec of relativeSpecifiers(original)) visit(resolveRelative(file, spec));
 		visiting.delete(file);
 		if (!seen.has(file)) seen.set(file, transform(file).source);
@@ -156,58 +180,106 @@ function hoistImports(modules) {
 	return lines;
 }
 
-const modules = collect("src/index.mjs");
+/**
+ * Build one bundle.
+ *
+ * @param {string} entry   Entry module, relative to the repository root.
+ * @param {string} header  First comment line of the bundle.
+ * @param {"library"|"script"} mode
+ *   library: re-export the entry's public names.
+ *   script:  also run `main(argv)` of the entry when Node starts the bundle as
+ *            a script, and set the exit code from its result.
+ */
+function buildBundle(entry, header, mode) {
+	const modules = collect(entry);
+	const entryFile = join(root, entry);
 
-// Declare every namespace up front. The transformed bodies reference these
-// consts at IIFE-invocation time (not at module-evaluation time), so a
-// top-to-bottom `const` would otherwise hit a temporal dead zone.
-const decls = [...modules.keys()].map((f) => `let ${nsName(f)};`);
-const out = [];
-out.push("// cline-coding-plans — single-file distribution.");
-out.push("// Generated by scripts/build-dist.mjs. Do not edit by hand.");
-out.push("");
-out.push(...hoistImports(modules));
-out.push("");
-out.push(...decls);
-
-for (const [file, source] of modules) {
-	const rel = relative(root, file).split(sep).join("/");
-	// Imports were hoisted above; strip them from the body.
-	const body = source.replace(/^[ \t]*import\s+[^;]*?from\s*["'][^"']+["'];?[ \t]*$/gm, "");
-	out.push(`// ${"=".repeat(70)}`);
-	out.push(`// ${rel}`);
-	out.push(`${nsName(file)} = (() => {`);
-	out.push(body.trimEnd());
-	out.push(`return { ${transform(file).exported.join(", ")} };`);
-	out.push("})();");
+	// Declare every namespace up front. The transformed bodies reference these
+	// consts at IIFE-invocation time (not at module-evaluation time), so a
+	// top-to-bottom `const` would otherwise hit a temporal dead zone.
+	const decls = [...modules.keys()].map((f) => `let ${nsName(f)};`);
+	const out = [];
+	out.push(header);
+	out.push("// Generated by scripts/build-dist.mjs. Do not edit by hand.");
 	out.push("");
+	if (mode === "script") {
+		// Aliased names cannot collide with a module's own imports.
+		out.push('import { realpathSync as __realpath } from "node:fs";');
+		out.push('import { fileURLToPath as __fileURLToPath } from "node:url";');
+	}
+	out.push(...hoistImports(modules));
+	out.push("");
+	out.push(...decls);
+
+	for (const [file, source] of modules) {
+		const rel = relative(root, file).split(sep).join("/");
+		// Imports were hoisted above; strip them from the body.
+		const body = source.replace(/^[ \t]*import\s+[^;]*?from\s*["'][^"']+["'];?[ \t]*$/gm, "");
+		out.push(`// ${"=".repeat(70)}`);
+		out.push(`// ${rel}`);
+		out.push(`${nsName(file)} = (() => {`);
+		out.push(body.trimEnd());
+		out.push(`return { ${transform(file).exported.join(", ")} };`);
+		out.push("})();");
+		out.push("");
+	}
+
+	// Re-export the entry's public surface. A plain `export { a, b }` would
+	// reference bindings that live inside the module IIFEs and are not in scope
+	// here, so destructure the entry namespace into top-level consts instead —
+	// `export const { a, b } = ns` is valid and keeps everything resolvable.
+	const exported = transform(entryFile).exported.filter((name) => !name.startsWith("default:"));
+	out.push(`const __entry = ${nsName(entryFile)};`);
+	out.push(`export const { ${exported.join(", ")} } = __entry;`);
+	out.push(`export default __entry;`);
+
+	if (mode === "script") {
+		// Start `main` only when this file is the script that Node runs. A test
+		// that imports the bundle must not trigger a run. The exit code is set
+		// and not forced with process.exit(), so that stdout can drain.
+		out.push("const __isScript = (() => {");
+		out.push("\ttry {");
+		out.push("\t\treturn Boolean(process.argv[1]) && __realpath.native(process.argv[1]) === __realpath.native(__fileURLToPath(import.meta.url));");
+		out.push("\t} catch {");
+		out.push("\t\treturn false;");
+		out.push("\t}");
+		out.push("})();");
+		out.push("if (__isScript) process.exitCode = await __entry.main(process.argv.slice(2));");
+	}
+	return { text: out.join("\n"), count: modules.size };
 }
 
-// Re-export the entry's public surface. A plain `export { a, b }` would
-// reference bindings that live inside the module IIFEs and are not in scope
-// here, so destructure the entry namespace into top-level consts instead —
-// `export const { a, b } = ns` is valid and keeps everything resolvable.
-const exported = transform(join(root, "src/index.mjs")).exported;
-const entryNs = nsName(join(root, "src/index.mjs"));
-out.push(`const __entry = ${entryNs};`);
-out.push(`export const { ${exported.join(", ")} } = __entry;`);
-out.push(`export default __entry;`);
+/**
+ * The dist CLI is the bin's own source with every relative `../src/*` import
+ * repointed at the single bundled file. Two files ship: the library and the
+ * CLI that drives it.
+ */
+function buildLegacyCli() {
+	return readSource(join(root, "bin", "coding-plans.mjs")).replace(/from\s*["']\.\.\/src\/[^"']+["']/g, 'from "./coding-plans.mjs"');
+}
 
-mkdirSync(join(root, "dist"), { recursive: true });
-const bundlePath = join(root, "dist", "coding-plans.mjs");
-const text = out.join("\n");
-writeFileSync(bundlePath, text, "utf8");
+const library = buildBundle("src/index.mjs", "// cline-coding-plans — single-file distribution.", "library");
+const dispatch = buildBundle("src/dispatch/cli.mjs", "// harness-dispatch — single-file script of the skill.", "script");
 
-// The dist CLI is the bin's own source with every relative `../src/*` import
-// repointed at the single bundled file. Two files ship: the library and the
-// CLI that drives it.
-const cliSource = readFileSync(join(root, "bin", "coding-plans.mjs"), "utf8").replace(
-	/from\s*["']\.\.\/src\/[^"']+["']/g,
-	'from "./coding-plans.mjs"',
-);
-writeFileSync(join(root, "dist", "cli.mjs"), cliSource, "utf8");
+const outputs = [
+	{ path: "dist/coding-plans.mjs", text: library.text, note: `${library.text.length} bytes, ${library.count} modules` },
+	{ path: "dist/cli.mjs", text: buildLegacyCli() },
+	{ path: "skill/harness-dispatch/scripts/hd.mjs", text: dispatch.text, note: `${dispatch.text.length} bytes, ${dispatch.count} modules` },
+];
 
-console.log(`wrote dist/coding-plans.mjs (${text.length} bytes, ${modules.size} modules)`);
-console.log("wrote dist/cli.mjs");
+if (process.argv.includes("--check")) {
+	const stale = outputs.filter(({ path, text }) => {
+		const file = join(root, path);
+		return !existsSync(file) || readSource(file) !== text;
+	});
+	for (const { path } of stale) console.error(`stale: ${path}`);
+	if (stale.length === 0) console.log("bundles are current");
+	process.exit(stale.length === 0 ? 0 : 1);
+}
 
-
+for (const { path, text, note } of outputs) {
+	const file = join(root, path);
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, text, "utf8");
+	console.log(`wrote ${path}${note ? ` (${note})` : ""}`);
+}

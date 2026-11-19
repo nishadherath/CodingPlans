@@ -9,3 +9,6 @@
 dist/*.mjs text eol=lf
 *.sh text eol=lf
 
+
+# The skill script is generated and must be byte-reproducible (see scripts/build-dist.mjs --check).
+skill/**/scripts/*.mjs text eol=lf
