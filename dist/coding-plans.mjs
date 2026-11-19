@@ -3,12 +3,12 @@
 
 import * as __imp_0_node_child_process from "node:child_process";
 const { spawn } = __imp_0_node_child_process;
-import * as __imp_1_node_fs from "node:fs";
-const { accessSync, constants, existsSync, readdirSync, statSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } = __imp_1_node_fs;
-import * as __imp_2_node_os from "node:os";
-const { homedir } = __imp_2_node_os;
-import * as __imp_3_node_path from "node:path";
-const { delimiter, dirname, join, resolve } = __imp_3_node_path;
+import * as __imp_1_node_path from "node:path";
+const { join, delimiter, dirname, resolve } = __imp_1_node_path;
+import * as __imp_2_node_fs from "node:fs";
+const { accessSync, constants, existsSync, readdirSync, statSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } = __imp_2_node_fs;
+import * as __imp_3_node_os from "node:os";
+const { homedir } = __imp_3_node_os;
 
 let __ns_src_util_exec_mjs;
 let __ns_src_detect_cli_mjs;
@@ -26,7 +26,7 @@ let __ns_src_index_mjs;
 __ns_src_util_exec_mjs = (() => {
 // Child-process helpers.
 //
-// Two rules learned the hard way while bringing these providers up on Windows:
+// Three rules learned the hard way while bringing these providers up on Windows:
 //
 //  1. Never spawn a bare command name. Bun-compiled hosts (Cline ships one)
 //     spawn via libuv's uv_spawn, which does NOT apply Windows PATHEXT
@@ -36,6 +36,12 @@ __ns_src_util_exec_mjs = (() => {
 //
 //  2. Always bound the wait. A wedged child must surface as a timeout with the
 //     tail of its stderr, not as a hang that looks like a slow model.
+//
+//  3. A timeout must stop the whole process tree. A coding agent CLI starts
+//     helpers (npm launchers, shells, language servers). Killing only the
+//     direct child leaves them running and they keep the output pipes open.
+//     `killTree` and `execute` implement this rule for the dispatch engine.
+
 
 
 
@@ -52,53 +58,120 @@ class ExecError extends Error {
 }
 
 /**
- * Run a command and buffer its output.
+ * Stop a child and every process that it started.
  *
- * @param {string}   command      Absolute path, or a bare name when you have
- *                                 already proven it spawns.
+ * Windows: `taskkill /T /F` walks the tree. The absolute path is used so that
+ * the call does not depend on PATH. POSIX: the child must have been started
+ * with `detached: true` (its own process group). Then one signal to the
+ * negative pid reaches the whole group.
+ *
+ * @param {import("node:child_process").ChildProcess} child
+ * @param {object}  [options]
+ * @param {boolean} [options.group]  The child leads its own POSIX process group.
+ */
+function killTree(child, { group = false, platform = process.platform, env = process.env } = {}) {
+	const pid = child.pid;
+	if (!pid) return;
+	const fallback = () => {
+		try {
+			child.kill("SIGKILL");
+		} catch {
+			// The child is already gone.
+		}
+	};
+	if (platform === "win32") {
+		const systemRoot = env.SystemRoot ?? env.windir ?? "C:\Windows";
+		try {
+			const killer = spawn(join(systemRoot, "System32", "taskkill.exe"), ["/PID", String(pid), "/T", "/F"], {
+				stdio: "ignore",
+				windowsHide: true,
+			});
+			killer.on("error", fallback);
+			// A non-zero code means taskkill could not stop the tree. Stop the
+			// direct child at least.
+			killer.on("close", (code) => {
+				if (code !== 0) fallback();
+			});
+			killer.unref();
+		} catch {
+			fallback();
+		}
+		return;
+	}
+	try {
+		if (group) process.kill(-pid, "SIGKILL");
+		else child.kill("SIGKILL");
+	} catch {
+		fallback();
+	}
+}
+
+/**
+ * Run a command, buffer its output and NEVER reject.
+ *
+ * The result always has the same shape. A failure to start is reported in
+ * `spawnError`; a timeout is reported in `timedOut`. The dispatch engine
+ * needs this because each outcome maps to a different error code.
+ *
+ * @param {string}   command      Absolute path of an executable.
  * @param {string[]} args
  * @param {object}   [options]
  * @param {string}   [options.cwd]
- * @param {object}   [options.env]   Replaces process.env when provided.
+ * @param {object}   [options.env]       Replaces process.env when provided.
  * @param {number}   [options.timeoutMs=120000]
- * @param {boolean}  [options.input]  Written to stdin then closed. Required by
- *                                    both CLIs, which read a prompt from stdin.
- * @param {boolean}  [options.rejectOnNonZero=true]
+ * @param {string}   [options.input]     Written to stdin, then stdin closes.
+ * @param {boolean}  [options.killTree=false]  On timeout, stop the whole tree.
+ * @param {number}   [options.graceMs=3000]    After a tree kill, the longest wait
+ *                                             for the output pipes to close.
+ * @returns {Promise<{code: number|null, signal: string|null, stdout: string,
+ *   stderr: string, timedOut: boolean, spawnError: Error|null, durationMs: number}>}
  */
-function run(command, args = [], options = {}) {
-	const {
-		cwd,
-		env = process.env,
-		timeoutMs = 120_000,
-		input,
-		rejectOnNonZero = true,
-	} = options;
+function execute(command, args = [], options = {}) {
+	const { cwd, env = process.env, timeoutMs = 120_000, input, killTree: tree = false, graceMs = 3000 } = options;
+	// Without its own process group a POSIX child cannot be stopped as a tree.
+	const group = tree && process.platform !== "win32";
 
-	return new Promise((resolve, reject) => {
+	return new Promise((resolve) => {
+		const startedAt = Date.now();
+		let stdout = "";
+		let stderr = "";
+		let timedOut = false;
+		let settled = false;
+		let timer;
+		let grace;
+
+		const finish = (code, signal, spawnError = null) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			clearTimeout(grace);
+			resolve({ code, signal, stdout, stderr, timedOut, spawnError, durationMs: Date.now() - startedAt });
+		};
+
 		let child;
 		try {
 			child = spawn(command, args, {
 				cwd,
 				env,
-				// Both CLIs emit UTF-8 JSON on stdout. Without an explicit
-				// encoding Windows pipes decode as latin-1 and mangle any
-				// non-ASCII model output.
 				stdio: ["pipe", "pipe", "pipe"],
 				windowsHide: true,
+				detached: group,
 			});
 		} catch (error) {
-			reject(new ExecError(`Failed to spawn ${command}: ${error.message}`, { command }));
+			finish(null, null, error);
 			return;
 		}
 
-		let stdout = "";
-		let stderr = "";
-		let timedOut = false;
-		let settled = false;
-
-		const timer = setTimeout(() => {
+		timer = setTimeout(() => {
 			timedOut = true;
-			child.kill("SIGKILL");
+			if (tree) killTree(child, { group });
+			else child.kill("SIGKILL");
+			// A grandchild that survives can keep the pipes open. Do not wait for it.
+			grace = setTimeout(() => {
+				child.stdout?.destroy();
+				child.stderr?.destroy();
+				finish(null, "SIGKILL");
+			}, graceMs);
 		}, timeoutMs);
 
 		child.stdout?.setEncoding("utf8");
@@ -111,52 +184,65 @@ function run(command, args = [], options = {}) {
 		});
 
 		child.on("error", (error) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
 			// ENOENT here is the exact failure this package exists to prevent.
-			reject(
-				new ExecError(`Failed to spawn ${command}: ${error.message}`, {
-					code: error.code,
-					stderr,
-					command,
-				}),
-			);
+			// An error after a successful start (a failed kill) is not fatal.
+			if (child.pid === undefined) finish(null, null, error);
 		});
+		child.on("close", (code, signal) => finish(code, signal));
 
-		child.on("close", (code) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			if (timedOut) {
-				reject(
-					new ExecError(`Timed out after ${timeoutMs}ms: ${command}`, {
-						stdout,
-						stderr,
-						timedOut: true,
-						command,
-					}),
-				);
-				return;
-			}
-			if (code !== 0 && rejectOnNonZero) {
-				reject(
-					new ExecError(
-						`Exited ${code}: ${command}${stderr ? `\n${stderr.trim()}` : ""}`,
-						{ code, stdout, stderr, command },
-					),
-				);
-				return;
-			}
-			resolve({ stdout, stderr, code });
-		});
-
-		if (input !== undefined && child.stdin) {
-			child.stdin.end(input);
-		} else if (child.stdin) {
-			child.stdin.end();
-		}
+		// The child can exit before it reads stdin. EPIPE must not crash the process.
+		child.stdin?.on("error", () => {});
+		if (input !== undefined) child.stdin?.end(input);
+		else child.stdin?.end();
 	});
+}
+
+/**
+ * Run a command and buffer its output. Rejects on spawn failure, timeout and
+ * (by default) a non-zero exit. The legacy `coding-plans` code uses this.
+ *
+ * @param {string}   command      Absolute path, or a bare name when you have
+ *                                 already proven it spawns.
+ * @param {string[]} args
+ * @param {object}   [options]
+ * @param {string}   [options.cwd]
+ * @param {object}   [options.env]   Replaces process.env when provided.
+ * @param {number}   [options.timeoutMs=120000]
+ * @param {boolean}  [options.input]  Written to stdin then closed. Required by
+ *                                    both CLIs, which read a prompt from stdin.
+ * @param {boolean}  [options.rejectOnNonZero=true]
+ * @param {boolean}  [options.killTree=false]  See `execute`.
+ */
+async function run(command, args = [], options = {}) {
+	const { rejectOnNonZero = true, ...rest } = options;
+	const result = await execute(command, args, rest);
+	const { stdout, stderr } = result;
+
+	if (result.spawnError) {
+		throw new ExecError(`Failed to spawn ${command}: ${result.spawnError.message}`, {
+			code: result.spawnError.code,
+			stderr,
+			command,
+		});
+	}
+	if (result.timedOut) {
+		throw new ExecError(`Timed out after ${rest.timeoutMs ?? 120_000}ms: ${command}`, {
+			stdout,
+			stderr,
+			timedOut: true,
+			command,
+		});
+	}
+	if (result.code !== 0 && rejectOnNonZero) {
+		throw new ExecError(`Exited ${result.code}: ${command}${stderr ? `
+${stderr.trim()}` : ""}`, {
+			code: result.code,
+			stdout,
+			stderr,
+			command,
+		});
+	}
+	return { stdout, stderr, code: result.code };
 }
 
 /** Run and swallow failures, returning null instead. For probe-style calls. */
@@ -210,7 +296,7 @@ function stream(command, args = [], { onLine, onExit, cwd, env = process.env, ti
 		child.stdin?.end();
 	});
 }
-return { ExecError, run, tryRun, stream };
+return { ExecError, killTree, execute, run, tryRun, stream };
 })();
 
 // ======================================================================
