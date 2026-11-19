@@ -214,6 +214,22 @@ test("a command line that is too long for the OS gives prompt-too-long, not not-
 	}
 });
 
+// H2: the envelope `exit_code` is the code of hd (deviation 3 of H1). The raw
+// code of the target must then be in the log file, as the H1 note says.
+test("the log file records the exit code and signal of the target", async () => {
+	const box = sandbox();
+	try {
+		const exec = fakeExec(makeResult({ code: 7, signal: null, stdout: "out", stderr: "err" }));
+		const envelope = await dispatch(makeRequest({ cwd: box.dir }), { env: box.env, exec, tmpRoot: box.tmpRoot });
+		const log = readFileSync(envelope.log_file, "utf8");
+		assert.match(log, /exit code: 7, signal: none/);
+		assert.match(log, /out/);
+		assert.match(log, /err/);
+	} finally {
+		box.cleanup();
+	}
+});
+
 test("prompt-too-long for antigravity: exit code 2, no spawn", async () => {
 	const box = sandbox();
 	try {

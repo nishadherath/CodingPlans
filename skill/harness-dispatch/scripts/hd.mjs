@@ -1544,7 +1544,9 @@ function writeLog(deps, request, result) {
 		const folder = join(deps.tmpRoot, "harness-dispatch");
 		mkdirSync(folder, { recursive: true });
 		const file = join(folder, `${request.to}-${deps.randomId()}.log`);
-		writeFileSync(file, `=== stdout ===\n${result.stdout}\n=== stderr ===\n${result.stderr}\n`, { mode: 0o600 });
+		// The envelope `exit_code` is the code of hd. The raw code of the target is kept here.
+		const status = `=== exit code: ${result.code ?? "none"}, signal: ${result.signal ?? "none"}, timed out: ${result.timedOut === true} ===`;
+		writeFileSync(file, `${status}\n=== stdout ===\n${result.stdout}\n=== stderr ===\n${result.stderr}\n`, { mode: 0o600 });
 		return file;
 	} catch {
 		return null;
