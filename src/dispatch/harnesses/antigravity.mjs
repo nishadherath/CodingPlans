@@ -92,7 +92,8 @@ const adapter = {
 		if (text === null && structured === null) {
 			return { ...failure("bad-output", "The Antigravity result has no response and no structured output."), ...common };
 		}
-		return { ok: true, text: text ?? "", structured, error: null, ...common };
+		// A real run answered "OK\n". The final newline is not part of the answer.
+		return { ok: true, text: (text ?? "").trimEnd(), structured, error: null, ...common };
 	},
 
 	// `agy --help` shows no sign-in status command. `hd doctor` reports "unknown".

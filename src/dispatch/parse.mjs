@@ -66,6 +66,22 @@ export function parseJsonLines(text) {
 	return events;
 }
 
+/**
+ * The human text of an error message.
+ *
+ * Codex puts a JSON document in the message, for example
+ * `{"type":"error","status":400,"error":{"message":"..."}}`. Return the inner
+ * message when the text parses and has one. Else return the text unchanged.
+ */
+export function unwrapMessage(text) {
+	const object = parseJsonLoose(text);
+	if (object && !Array.isArray(object)) {
+		const inner = pickString(object.error?.message, object.message);
+		if (inner) return inner;
+	}
+	return String(text ?? "");
+}
+
 /** The first argument that is a finite number, else null. */
 export function pickNumber(...values) {
 	for (const value of values) {
@@ -82,8 +98,10 @@ export function pickString(...values) {
 	return null;
 }
 
+// The last four patterns come from a real failed run: Claude Code printed
+// "Failed to authenticate: OAuth session expired and could not be refreshed".
 const UNAUTHENTICATED =
-	/not\s+(?:logged|signed)\s+in|(?:please\s+)?(?:run\s+)?\/?login\b|invalid\s+api\s+key|authentication\s+(?:failed|required|error)|unauthori[sz]ed|\b401\b|missing\s+credentials|no\s+credentials/i;
+	/not\s+(?:logged|signed)\s+in|(?:please\s+)?(?:run\s+)?\/?login\b|invalid\s+api\s+key|authentication\s+(?:failed|required|error)|unauthori[sz]ed|\b401\b|missing\s+credentials|no\s+credentials|failed\s+to\s+authenticate|oauth|session\s+(?:has\s+)?expired|could\s+not\s+be\s+refreshed/i;
 
 /**
  * True when the text of a FAILED run looks like a sign-in problem.

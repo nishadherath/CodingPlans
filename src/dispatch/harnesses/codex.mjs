@@ -19,7 +19,7 @@
 // The parser accepts the known variants of the usage names.
 
 import { DispatchError } from "../envelope.mjs";
-import { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText } from "../parse.mjs";
+import { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
 import { resolveNamed } from "../resolve.mjs";
 
 const SANDBOX = { read: "read-only", write: "workspace-write" };
@@ -65,8 +65,10 @@ const adapter = {
 			else if (event.type === "item.completed" && event.item?.type === "agent_message") {
 				lastAgentMessage = pickString(event.item.text) ?? lastAgentMessage;
 			} else if (event.type === "turn.completed") usage = event.usage ?? usage;
-			else if (event.type === "turn.failed") turnFailure = pickString(event.error?.message, event.message) ?? "The turn failed.";
-			else if (event.type === "error") lastError = pickString(event.message) ?? lastError;
+			else if (event.type === "turn.failed") turnFailure = unwrapMessage(pickString(event.error?.message, event.message) ?? "The turn failed.");
+			else if (event.type === "error") lastError = unwrapMessage(pickString(event.message) ?? lastError);
+			// An `item.completed` item of type "error" is a warning (a real run
+			// printed three of them before a failure). It does not fail the run.
 		}
 
 		const common = {

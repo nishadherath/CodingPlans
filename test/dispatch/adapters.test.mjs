@@ -252,3 +252,39 @@ test("antigravity models: the status line is skipped", () => {
 test("antigravity has no auth check, and reports unknown", () => {
 	assert.equal(antigravity.authCheck, null);
 });
+
+// ------------------------------------------------- real captured output
+// These fixtures come from live runs that the operator approved (hub session,
+// 2026-11-20). Two of the three are failures: the Claude session had expired,
+// and the Codex default model was not allowed for the account.
+
+test("claude real output: an expired OAuth session is not-authenticated", () => {
+	const parsed = claude.parseOutput(makeResult({ code: 1, stdout: fixture("claude", "real-auth-expired.stdout.json") }));
+	assert.equal(parsed.ok, false);
+	assert.equal(parsed.error.code, "not-authenticated");
+	assert.equal(parsed.session_id, "93b9c78e-4a7b-4242-8e02-5b6f6777da80", "field names match the real output");
+	assert.equal(parsed.cost_usd, 0);
+	assert.equal(parsed.usage.input_tokens, 0);
+});
+
+test("codex real output: warnings do not fail a run, the inner error text is shown", () => {
+	const parsed = codex.parseOutput(makeResult({ code: 1, stdout: fixture("codex", "real-model-not-supported.stdout.jsonl") }), {});
+	assert.equal(parsed.ok, false);
+	assert.equal(parsed.session_id, "01a1f602-4089-7082-930d-89e098a69fe6");
+	assert.equal(parsed.error.code, "target-error");
+	assert.match(parsed.error.message, /model is not supported when using Codex with a ChatGPT account/);
+	assert.doesNotMatch(parsed.error.message, /[{}]/, "the JSON wrapper is removed");
+});
+
+test("codex real output: warning items alone, with exit 0 and no message, are bad output", () => {
+	const warnings = fixture("codex", "real-model-not-supported.stdout.jsonl").split("\n").filter((line) => !/turn\.failed|"type":"error"/.test(line)).join("\n");
+	assert.equal(codex.parseOutput(makeResult({ code: 0, stdout: warnings }), {}).error.code, "bad-output");
+});
+
+test("antigravity real output: success", () => {
+	const parsed = antigravity.parseOutput(makeResult({ stdout: fixture("antigravity", "real-success.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.text, "OK", "the final newline is removed");
+	assert.equal(parsed.session_id, "dc0f94f7-4854-4e1b-b050-a831c3aa8aae");
+	assert.deepEqual(parsed.usage, { input_tokens: 22362, output_tokens: 634, cache_read_tokens: 0, reasoning_tokens: 632, total_tokens: 22996 });
+});

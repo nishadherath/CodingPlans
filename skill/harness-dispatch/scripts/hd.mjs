@@ -96,6 +96,22 @@ function parseJsonLines(text) {
 	return events;
 }
 
+/**
+ * The human text of an error message.
+ *
+ * Codex puts a JSON document in the message, for example
+ * `{"type":"error","status":400,"error":{"message":"..."}}`. Return the inner
+ * message when the text parses and has one. Else return the text unchanged.
+ */
+function unwrapMessage(text) {
+	const object = parseJsonLoose(text);
+	if (object && !Array.isArray(object)) {
+		const inner = pickString(object.error?.message, object.message);
+		if (inner) return inner;
+	}
+	return String(text ?? "");
+}
+
 /** The first argument that is a finite number, else null. */
 function pickNumber(...values) {
 	for (const value of values) {
@@ -112,8 +128,10 @@ function pickString(...values) {
 	return null;
 }
 
+// The last four patterns come from a real failed run: Claude Code printed
+// "Failed to authenticate: OAuth session expired and could not be refreshed".
 const UNAUTHENTICATED =
-	/not\s+(?:logged|signed)\s+in|(?:please\s+)?(?:run\s+)?\/?login\b|invalid\s+api\s+key|authentication\s+(?:failed|required|error)|unauthori[sz]ed|\b401\b|missing\s+credentials|no\s+credentials/i;
+	/not\s+(?:logged|signed)\s+in|(?:please\s+)?(?:run\s+)?\/?login\b|invalid\s+api\s+key|authentication\s+(?:failed|required|error)|unauthori[sz]ed|\b401\b|missing\s+credentials|no\s+credentials|failed\s+to\s+authenticate|oauth|session\s+(?:has\s+)?expired|could\s+not\s+be\s+refreshed/i;
 
 /**
  * True when the text of a FAILED run looks like a sign-in problem.
@@ -122,7 +140,7 @@ const UNAUTHENTICATED =
 function looksUnauthenticated(text) {
 	return UNAUTHENTICATED.test(String(text ?? ""));
 }
-return { redact, tailText, parseJsonLoose, parseJsonLines, pickNumber, pickString, looksUnauthenticated };
+return { redact, tailText, parseJsonLoose, parseJsonLines, unwrapMessage, pickNumber, pickString, looksUnauthenticated };
 })();
 
 // ======================================================================
@@ -1166,7 +1184,8 @@ const adapter = {
 		if (text === null && structured === null) {
 			return { ...failure("bad-output", "The Antigravity result has no response and no structured output."), ...common };
 		}
-		return { ok: true, text: text ?? "", structured, error: null, ...common };
+		// A real run answered "OK\n". The final newline is not part of the answer.
+		return { ok: true, text: (text ?? "").trimEnd(), structured, error: null, ...common };
 	},
 
 	// `agy --help` shows no sign-in status command. `hd doctor` reports "unknown".
@@ -1283,7 +1302,7 @@ const adapter = {
 		if (answer === null && structured === null) {
 			return { ...failure("bad-output", "The Claude Code result has no text and no structured output."), ...common };
 		}
-		return { ok: true, text: answer ?? "", structured, error: null, ...common };
+		return { ok: true, text: (answer ?? "").trimEnd(), structured, error: null, ...common };
 	},
 
 	authCheck: {
@@ -1326,7 +1345,7 @@ __ns_src_dispatch_harnesses_codex_mjs = (() => {
 // The parser accepts the known variants of the usage names.
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
-const { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
+const { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } = __ns_src_dispatch_parse_mjs;
 const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
 const SANDBOX = { read: "read-only", write: "workspace-write" };
@@ -1372,8 +1391,10 @@ const adapter = {
 			else if (event.type === "item.completed" && event.item?.type === "agent_message") {
 				lastAgentMessage = pickString(event.item.text) ?? lastAgentMessage;
 			} else if (event.type === "turn.completed") usage = event.usage ?? usage;
-			else if (event.type === "turn.failed") turnFailure = pickString(event.error?.message, event.message) ?? "The turn failed.";
-			else if (event.type === "error") lastError = pickString(event.message) ?? lastError;
+			else if (event.type === "turn.failed") turnFailure = unwrapMessage(pickString(event.error?.message, event.message) ?? "The turn failed.");
+			else if (event.type === "error") lastError = unwrapMessage(pickString(event.message) ?? lastError);
+			// An `item.completed` item of type "error" is a warning (a real run
+			// printed three of them before a failure). It does not fail the run.
 		}
 
 		const common = {

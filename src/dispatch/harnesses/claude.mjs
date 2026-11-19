@@ -86,7 +86,7 @@ const adapter = {
 		if (answer === null && structured === null) {
 			return { ...failure("bad-output", "The Claude Code result has no text and no structured output."), ...common };
 		}
-		return { ok: true, text: answer ?? "", structured, error: null, ...common };
+		return { ok: true, text: (answer ?? "").trimEnd(), structured, error: null, ...common };
 	},
 
 	authCheck: {
