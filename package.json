@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "bin": {
-    "coding-plans": "./bin/coding-plans.mjs"
+    "coding-plans": "./bin/coding-plans.mjs",
+    "harness-dispatch": "./bin/harness-dispatch.mjs"
   },
   "main": "./src/index.mjs",
   "exports": {
@@ -17,11 +18,14 @@
   "files": [
     "bin",
     "src",
+    "skill",
+    "scripts/install-skill.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs test/dispatch/*.test.mjs",
+    "check:bundles": "node scripts/build-dist.mjs --check",
     "test:live": "node --test --test-concurrency=1 test/live.test.mjs",
     "build:dist": "node scripts/build-dist.mjs",
     "doctor": "node bin/coding-plans.mjs doctor"

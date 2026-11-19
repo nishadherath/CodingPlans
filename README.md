@@ -1,5 +1,20 @@
 # CodingPlans
 
+> **New: the skill `harness-dispatch`.** An agent in one coding harness can send a
+> task to a different harness (Claude Code, OpenAI Codex, Google Antigravity) and
+> get one JSON result. The skill is in `skill/harness-dispatch/`. Its instructions
+> are in `SKILL.md`. Its script is one file with no dependencies: `scripts/hd.mjs`.
+> The specification is `docs/design/harness-dispatch-contract.md`.
+>
+> ```
+> node bin/harness-dispatch.mjs list       # targets, paths, versions (no model call)
+> node bin/harness-dispatch.mjs doctor     # installed, startable, signed in
+> node scripts/install-skill.mjs           # dry run: shows where the skill would go
+> ```
+>
+> Run `npm test` for the tests. Run `npm run build:dist` after you change `src/` or
+> `bin/`. The rest of this file describes the older Cline provider tool.
+
 Enable **CLI-backed coding plans** as model providers in [Cline](https://cline.bot) —
 currently **Claude Code** and **OpenAI Codex** — and prove they actually work.
 
