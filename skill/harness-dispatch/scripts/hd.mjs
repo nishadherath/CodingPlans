@@ -1605,6 +1605,12 @@ async function dispatch(request, overrides = {}) {
 		const duration = deps.now() - startedAt;
 		const after = { log_file: logFile, duration_ms: duration };
 
+		// The OS refuses a command line that is too long (Windows: 32,767
+		// characters after quote escaping). The target exists, so this is not
+		// exit code 3. The caller must shorten the prompt or the schema.
+		if (["ENAMETOOLONG", "E2BIG"].includes(result.spawnError?.code)) {
+			return fail("prompt-too-long", `The command line for ${adapter.name} is too long for this operating system (${result.spawnError.code}). Write a shorter brief, or a smaller schema.`, after);
+		}
 		if (result.spawnError) {
 			return fail("not-startable", `${adapter.name} could not be started (${result.spawnError.code ?? "spawn error"}).`, after);
 		}

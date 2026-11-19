@@ -197,6 +197,23 @@ test("a spawn error gives not-startable", async () => {
 	}
 });
 
+// H2: a quote-heavy agy prompt under 24,000 characters can still pass the
+// 32,767-character Windows command line after escaping. The OS refuses the
+// start. That is a usage problem of the caller, not a missing target.
+test("a command line that is too long for the OS gives prompt-too-long, not not-startable", async () => {
+	const box = sandbox();
+	try {
+		for (const code of ["ENAMETOOLONG", "E2BIG"]) {
+			const exec = fakeExec(makeResult({ code: null, spawnError: Object.assign(new Error("x"), { code }) }));
+			const envelope = await dispatch(makeRequest({ to: "antigravity", cwd: box.dir }), { env: box.env, exec, tmpRoot: box.tmpRoot });
+			assert.equal(envelope.error.code, "prompt-too-long", code);
+			assert.equal(envelope.exit_code, 2, code);
+		}
+	} finally {
+		box.cleanup();
+	}
+});
+
 test("prompt-too-long for antigravity: exit code 2, no spawn", async () => {
 	const box = sandbox();
 	try {
