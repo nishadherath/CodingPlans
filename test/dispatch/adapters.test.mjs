@@ -186,6 +186,14 @@ test("codex parseOutput: exit 0 without a final message is bad output", () => {
 	assert.equal(parsed.error.code, "bad-output");
 });
 
+// H2: an `error` event with exit 0 and no final message must keep its text.
+test("codex parseOutput: exit 0, an error event and no final message is a target error with that text", () => {
+	const stdout = '{"type":"thread.started","thread_id":"t"}\n{"type":"error","message":"stream disconnected before completion"}';
+	const parsed = codex.parseOutput(makeResult({ stdout }), {});
+	assert.equal(parsed.error.code, "target-error");
+	assert.match(parsed.error.message, /stream disconnected/);
+});
+
 test("codex authCheck", () => {
 	assert.equal(codex.authCheck.parse(makeResult({ stdout: "Logged in using ChatGPT" })), true);
 	assert.equal(codex.authCheck.parse(makeResult({ code: 1, stdout: "Not logged in" })), false);

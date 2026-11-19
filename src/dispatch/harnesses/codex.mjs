@@ -93,6 +93,11 @@ const adapter = {
 		// The -o file is the primary source: it holds the final message only.
 		const fromFile = ctx.tempContents?.[ctx.invocation?.tempFiles?.[0]];
 		const text = typeof fromFile === "string" && fromFile.trim() ? fromFile.trimEnd() : lastAgentMessage;
+		if (!text && lastError) {
+			// Exit 0, no answer, but an `error` event: report the error, not "bad output".
+			const code = looksUnauthenticated(lastError) ? "not-authenticated" : "target-error";
+			return { ...failure(code, `Codex finished without a final message. ${tailText(lastError)}`), ...common };
+		}
 		if (!text) {
 			return { ...failure("bad-output", "Codex finished without a final message."), ...common };
 		}
