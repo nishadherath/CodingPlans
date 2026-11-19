@@ -31,6 +31,11 @@ export class ExecError extends Error {
 	}
 }
 
+/** Absolute path of taskkill.exe. The fallback needs "\\": "C:\W" is "C:W" in JS. */
+export function taskkillPath(env = process.env) {
+	return join(env.SystemRoot ?? env.windir ?? "C:\\Windows", "System32", "taskkill.exe");
+}
+
 /**
  * Stop a child and every process that it started.
  *
@@ -54,9 +59,8 @@ export function killTree(child, { group = false, platform = process.platform, en
 		}
 	};
 	if (platform === "win32") {
-		const systemRoot = env.SystemRoot ?? env.windir ?? "C:\Windows";
 		try {
-			const killer = spawn(join(systemRoot, "System32", "taskkill.exe"), ["/PID", String(pid), "/T", "/F"], {
+			const killer = spawn(taskkillPath(env), ["/PID", String(pid), "/T", "/F"], {
 				stdio: "ignore",
 				windowsHide: true,
 			});
