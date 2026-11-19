@@ -1,0 +1,1 @@
+{"conversation_id":"conv-123","status":"SUCCESS","response":"OK from agy","error":"","duration_seconds":3.2,"num_turns":1,"structured_output":null,"usage":{"input_tokens":50,"output_tokens":7,"thinking_tokens":11,"cache_read_tokens":30,"total_tokens":98}}

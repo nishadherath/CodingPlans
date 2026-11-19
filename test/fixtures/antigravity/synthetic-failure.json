@@ -1,0 +1,1 @@
+{"conversation_id":"conv-123","status":"ERROR","response":"","error":"model quota exceeded","duration_seconds":0.4,"num_turns":0,"structured_output":null,"usage":{"input_tokens":0,"output_tokens":0}}

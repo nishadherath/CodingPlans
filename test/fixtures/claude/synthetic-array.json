@@ -1,0 +1,1 @@
+[{"type":"system","subtype":"init","session_id":"s1"},{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}},{"type":"result","subtype":"success","is_error":false,"result":"OK from array","session_id":"s1","total_cost_usd":0.001,"usage":{"input_tokens":1,"output_tokens":2}}]
