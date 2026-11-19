@@ -282,7 +282,7 @@ test("codex real output: warning items alone, with exit 0 and no message, are ba
 });
 
 test("antigravity real output: success", () => {
-	const parsed = antigravity.parseOutput(makeResult({ stdout: fixture("antigravity", "real-success.stdout.json") }));
+	const parsed = antigravity.parseOutput(makeResult({ stdout: fixture("antigravity", "real-ok.stdout.json") }));
 	assert.equal(parsed.ok, true);
 	assert.equal(parsed.text, "OK", "the final newline is removed");
 	assert.equal(parsed.session_id, "dc0f94f7-4854-4e1b-b050-a831c3aa8aae");
