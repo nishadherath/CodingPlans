@@ -18,7 +18,7 @@ import {
 	logInfo as info,
 	logSuccess as success,
 	logWarn as warn,
-} from "../src/util/mjs";
+} from "../src/index.mjs";
 
 const USAGE = `
 coding-plans - enable CLI-backed coding plans in Cline (Claude Code, OpenAI Codex)
@@ -199,8 +199,9 @@ async function main() {
 
 main().then(
 	(code) => process.exit(code),
-	(error) => {
-		error(error?.stack ?? String(error));
+	// The parameter must not be named `error`: that would hide the logger.
+	(err) => {
+		error(err?.stack ?? String(err));
 		process.exit(1);
 	},
 );

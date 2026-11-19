@@ -21,7 +21,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/*.test.mjs test/dispatch/*.test.mjs",
     "test:live": "node --test --test-concurrency=1 test/live.test.mjs",
     "build:dist": "node scripts/build-dist.mjs",
     "doctor": "node bin/coding-plans.mjs doctor"

@@ -199,8 +199,9 @@ async function main() {
 
 main().then(
 	(code) => process.exit(code),
-	(error) => {
-		error(error?.stack ?? String(error));
+	// The parameter must not be named `error`: that would hide the logger.
+	(err) => {
+		error(err?.stack ?? String(err));
 		process.exit(1);
 	},
 );
