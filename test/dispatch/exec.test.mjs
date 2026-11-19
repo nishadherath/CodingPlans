@@ -94,10 +94,11 @@ test("run keeps its legacy behaviour: rejects on non-zero, timeout and spawn fai
 	await assert.rejects(run(join(tmpdir(), "hd-no-such-program-xyz")), (error) => /Failed to spawn/.test(error.message));
 });
 
-// H2: "C:\Windows" in a JS string is "C:Windows". Without SystemRoot and
+// H2: "C:\Windows" (one backslash) in a JS string is "C:Windows". Without SystemRoot and
 // windir, the tree kill must still use an absolute taskkill path.
-test("taskkillPath falls back to C:\Windows when SystemRoot and windir are missing", async () => {
+test("taskkillPath falls back to C:\\Windows when SystemRoot and windir are missing", async () => {
 	const { taskkillPath } = await import("../../src/util/exec.mjs");
-	assert.equal(taskkillPath({}), join("C:\Windows", "System32", "taskkill.exe"));
-	assert.equal(taskkillPath({ SystemRoot: "D:\Win" }), join("D:\Win", "System32", "taskkill.exe"));
+	assert.equal(taskkillPath({}), join("C:\\Windows", "System32", "taskkill.exe"));
+	assert.doesNotMatch(taskkillPath({}), /^C:Windows/);
+	assert.equal(taskkillPath({ SystemRoot: "D:\\Win" }), join("D:\\Win", "System32", "taskkill.exe"));
 });
