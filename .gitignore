@@ -6,3 +6,7 @@ node_modules/
 # The single-file bundle is a stated deliverable of this project — it is the
 # artefact people copy onto a machine with no npm, so it is versioned and
 # rebuilt by `npm run build:dist`.
+
+# Local index cache of the graft code-search tool. Not a project artefact.
+graft/
+.ignore
