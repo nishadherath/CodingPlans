@@ -1,14 +1,11 @@
-# Auto detect text files and perform LF normalization.
-#
-# The repo is authored with LF. `* text=auto` normalises to LF in the index and
-# lets Git convert on checkout per core.autocrlf, which is what we want for
-# source. The generated bundle is additionally pinned to LF: dist/coding-plans.mjs
-# is a build artefact that must be byte-reproducible from `npm run build:dist`,
-# and CRLF there would make local builds differ from committed output.
-* text=auto
+# Text files use LF in the index and in the working tree, on every platform.
+# Reason: the bundles (dist/ and skill/**/scripts/hd.mjs) are generated and must be
+# byte-reproducible from `npm run build:dist`. CRLF would make a local build differ
+# from the committed output, and `npm run check:bundles` would fail.
+* text=auto eol=lf
+
+# The generated bundles stay LF (explicit, in case the rule above changes).
 dist/*.mjs text eol=lf
-*.sh text eol=lf
-
-
-# The skill script is generated and must be byte-reproducible (see scripts/build-dist.mjs --check).
 skill/**/scripts/*.mjs text eol=lf
+
+*.sh text eol=lf
