@@ -205,14 +205,16 @@ test("codex authCheck", () => {
 const AGY_TAIL = ["--output-format", "json", "--print-timeout", "600s"];
 
 const agyTable = [
-	["read-only default", {}, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan"]],
+	// Live evidence (H3, run c1): "--mode plan" alone ran a command that an allow
+	// rule approved. "--sandbox" is the OS-level write stop.
+	["read-only default", {}, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan", "--sandbox"]],
 	["write", { access: "write" }, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "accept-edits"]],
 	[
 		"model and effort",
 		{ model: "gemini-4-neon-high", effort: "max", timeoutSec: 90 },
-		["-p", "Say OK.", "--output-format", "json", "--print-timeout", "90s", "--model", "gemini-4-neon-high", "--effort", "max", "--mode", "plan"],
+		["-p", "Say OK.", "--output-format", "json", "--print-timeout", "90s", "--model", "gemini-4-neon-high", "--effort", "max", "--mode", "plan", "--sandbox"],
 	],
-	["resume and schema", { resume: "conv-1", schema }, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan", "--conversation", "conv-1", "--json-schema", "/abs/schema.json"]],
+	["resume and schema", { resume: "conv-1", schema }, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan", "--sandbox", "--conversation", "conv-1", "--json-schema", "/abs/schema.json"]],
 ];
 
 for (const [name, overrides, expected] of agyTable) {
@@ -295,4 +297,72 @@ test("antigravity real output: success", () => {
 	assert.equal(parsed.text, "OK", "the final newline is removed");
 	assert.equal(parsed.session_id, "dc0f94f7-4854-4e1b-b050-a831c3aa8aae");
 	assert.deepEqual(parsed.usage, { input_tokens: 22362, output_tokens: 634, cache_read_tokens: 0, reasoning_tokens: 632, total_tokens: 22996 });
+});
+
+// ------------------------------------------------ H3 part 1: live fixtures
+
+test("codex passes each of the five efforts, and max is not refused", () => {
+	assert.deepEqual(codex.capabilities.efforts, ["low", "medium", "high", "xhigh", "max"]);
+	for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
+		const args = codex.buildInvocation(makeRequest({ to: "codex", cwd: "/work", effort }), makeCtx()).args;
+		assert.ok(args.includes(`model_reasoning_effort="${effort}"`), effort);
+	}
+});
+
+test("antigravity write access has no sandbox flag", () => {
+	const args = antigravity.buildInvocation(makeRequest({ to: "antigravity", access: "write" }), makeCtx()).args;
+	assert.ok(!args.includes("--sandbox"));
+});
+
+test("antigravity real output: a resumed conversation", () => {
+	const parsed = antigravity.parseOutput(makeResult({ stdout: fixture("antigravity", "real-resume.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.session_id, "648248b3-8bce-4704-bb1d-c5e4b01d5fe8");
+	assert.equal(parsed.text, "/plan Reply with exactly: OK", "plan mode puts /plan before the prompt");
+	assert.equal(parsed.usage.total_tokens, 49285);
+});
+
+test("antigravity real output: a schema run fills structured", () => {
+	const parsed = antigravity.parseOutput(makeResult({ stdout: fixture("antigravity", "real-schema.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.deepEqual(parsed.structured, { answer: "OK" });
+	assert.equal(parsed.text, '{"answer":"OK"}');
+	assert.equal(parsed.session_id, "d13b38ca-8b99-4e44-9e23-174948414c7a");
+	assert.equal(parsed.usage.cache_read_tokens, 22434);
+});
+
+test("antigravity real output: no answer and a denied action is permission-denied", () => {
+	const parsed = antigravity.parseOutput(makeResult({
+		stdout: fixture("antigravity", "real-denied-action.stdout.json"),
+		stderr: fixture("antigravity", "real-denied-action.stderr.txt"),
+	}));
+	assert.equal(parsed.ok, false);
+	assert.equal(parsed.error.code, "permission-denied");
+	assert.deepEqual(parsed.denied_actions, ["command: Bash"]);
+	assert.match(parsed.error.message, /command: Bash/);
+	assert.match(parsed.error.message, /allow rule/);
+	assert.doesNotMatch(parsed.error.message, /dangerously/i);
+	assert.equal(parsed.session_id, "381f1e41-f48e-4f5c-91df-f2df6f80ef9f");
+});
+
+test("antigravity: a denied action with an answer is still a success, and the field is kept", () => {
+	const object = JSON.parse(fixture("antigravity", "real-denied-action.stdout.json"));
+	object.response = "I could not run the command, but here is the plan.";
+	const parsed = antigravity.parseOutput(makeResult({ stdout: JSON.stringify(object) }));
+	assert.equal(parsed.ok, true);
+	assert.deepEqual(parsed.denied_actions, ["command: Bash"]);
+});
+
+test("a usage limit is usage-limit in each adapter", () => {
+	const codexParsed = codex.parseOutput(makeResult({ code: 1, stdout: fixture("codex", "real-usage-limit.stdout.jsonl") }), {});
+	assert.equal(codexParsed.error.code, "usage-limit");
+	assert.equal(codexParsed.session_id, "01a1f644-6745-7212-a1f1-d4764b712baa");
+	const claudeParsed = claude.parseOutput(makeResult({ code: 1, stdout: JSON.stringify({ type: "result", is_error: true, result: "Claude AI usage limit reached" }) }));
+	assert.equal(claudeParsed.error.code, "usage-limit");
+	const claudeNoJson = claude.parseOutput(makeResult({ code: 1, stderr: "429 Too Many Requests" }));
+	assert.equal(claudeNoJson.error.code, "usage-limit");
+	const agyParsed = antigravity.parseOutput(makeResult({ code: 1, stdout: JSON.stringify({ status: "FAILED", error: "rate limit exceeded" }) }));
+	assert.equal(agyParsed.error.code, "usage-limit");
+	const agyNoJson = antigravity.parseOutput(makeResult({ code: 1, stderr: "quota exceeded: you have exceeded your current quota" }));
+	assert.equal(agyNoJson.error.code, "usage-limit");
 });

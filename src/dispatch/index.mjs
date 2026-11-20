@@ -14,13 +14,14 @@ import { execute } from "../util/exec.mjs";
 import { SCHEMA, buildEnvelope, errorEnvelope, DispatchError, truncateText } from "./envelope.mjs";
 import { checkDepth, withDepth } from "./guard.mjs";
 import { HARNESSES, getHarness } from "./harnesses/index.mjs";
-import { diagnose, readVersion } from "./resolve.mjs";
+import { PROCESS_VERSION_CACHE, diagnose, readVersion } from "./resolve.mjs";
 
 /** The real effects. A test replaces any of them. */
 export function defaultDeps() {
 	return {
 		env: process.env,
 		exec: execute,
+		versionCache: PROCESS_VERSION_CACHE,
 		now: () => Date.now(),
 		tmpRoot: tmpdir(),
 		randomId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -95,7 +96,7 @@ export async function dispatch(request, overrides = {}) {
 	}
 	if (!deps.isDirectory(request.cwd)) return fail("usage", `The working directory does not exist: ${request.cwd}`);
 
-	const found = diagnose(adapter, deps.env);
+	const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 	if (found.state !== "ok") return fail(found.state, found.message);
 
 	// Temp files live in one folder for this run. The folder is deleted at the end.
@@ -163,6 +164,7 @@ export async function dispatch(request, overrides = {}) {
 			truncated: cut.truncated,
 			usage: parsed.usage ?? undefined,
 			cost_usd: parsed.cost_usd,
+			denied_actions: parsed.denied_actions,
 			error: parsed.ok === true ? null : { code: parsed.error?.code ?? "target-error", message: parsed.error?.message ?? "The target failed." },
 			...after,
 		});
@@ -183,10 +185,10 @@ export async function listTargets(overrides = {}) {
 	const deps = { ...defaultDeps(), ...overrides };
 	const targets = [];
 	for (const adapter of HARNESSES) {
-		const found = diagnose(adapter, deps.env);
+		const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 		const entry = { id: adapter.id, name: adapter.name, cli: adapter.cli, installed: found.state !== "not-installed", startable: false, executable: null, via: null, version: null };
 		if (found.state === "ok") {
-			const probe = await readVersion(found, deps.exec, adapter.versionArgs);
+			const probe = await readVersion(found, deps.exec, adapter.versionArgs, deps.versionCache);
 			Object.assign(entry, { startable: probe.startable, executable: found.command, via: found.via, version: probe.version });
 		}
 		targets.push(entry);
@@ -204,14 +206,14 @@ export async function doctor(selection, overrides = {}) {
 	const adapters = selection ? [getHarness(selection)] : HARNESSES;
 	const checks = [];
 	for (const adapter of adapters) {
-		const found = diagnose(adapter, deps.env);
+		const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 		const check = { id: adapter.id, installed: found.state !== "not-installed", startable: false, authenticated: null, version: null, notes: [] };
 		if (found.state !== "ok") {
 			check.notes.push(found.message);
 			checks.push(check);
 			continue;
 		}
-		const probe = await readVersion(found, deps.exec, adapter.versionArgs);
+		const probe = await readVersion(found, deps.exec, adapter.versionArgs, deps.versionCache);
 		check.startable = probe.startable;
 		check.version = probe.version;
 		if (!probe.startable) check.notes.push(`${adapter.name} did not answer --version.`);
@@ -237,7 +239,7 @@ export async function listModels(id, overrides = {}) {
 	if (!adapter?.listModels) {
 		return done({ ok: true, exit_code: 0, note: "This target has no model list command. Pass a model id with --model." });
 	}
-	const found = diagnose(adapter, deps.env);
+	const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 	if (found.state !== "ok") return done({ ok: false, exit_code: 3, error: { code: found.state, message: found.message } });
 	const result = await deps.exec(found.command, [...found.prefixArgs, ...adapter.listModels.args], { timeoutMs: 30_000, killTree: true });
 	if (result.spawnError || result.timedOut || result.code !== 0) {

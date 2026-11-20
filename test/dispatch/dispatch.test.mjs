@@ -248,8 +248,10 @@ test("capability checks give usage errors", async () => {
 	try {
 		const exec = fakeExec(makeResult());
 		const deps = { env: box.env, exec, tmpRoot: box.tmpRoot };
+		// "max" is accepted for Codex since H3 part 1. A resume is accepted by every target.
 		const effort = await dispatch(makeRequest({ to: "codex", cwd: box.dir, effort: "max" }), deps);
-		assert.equal(effort.error.code, "usage");
+		assert.notEqual(effort.error?.code, "usage");
+		exec.calls.length = 0;
 		const missing = await dispatch(makeRequest({ cwd: join(box.dir, "no-such-folder") }), deps);
 		assert.equal(missing.error.code, "usage");
 		assert.equal(exec.calls.length, 0);

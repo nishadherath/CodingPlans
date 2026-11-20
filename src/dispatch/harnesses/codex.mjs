@@ -15,12 +15,14 @@
 // resolver prefers a real `codex.exe` on PATH, then starts the package entry
 // file with this Node program (the official launcher).
 //
-// Not verified by a live run: the event names and the usage field names.
-// The parser accepts the known variants of the usage names.
+// Failure events were seen in live runs (H3). Not verified by a live run: the
+// success events and the usage field names. The parser accepts the known
+// variants of the usage names.
 
 import { DispatchError } from "../envelope.mjs";
-import { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
-import { resolveNamed } from "../resolve.mjs";
+import { failureCode, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
+import { EFFORTS } from "../request.mjs";
+import { codexCandidates, resolveNamed } from "../resolve.mjs";
 
 const SANDBOX = { read: "read-only", write: "workspace-write" };
 
@@ -28,11 +30,20 @@ const adapter = {
 	id: "codex",
 	name: "OpenAI Codex CLI",
 	cli: "codex",
-	// `max` is not in the Codex help text. It is left out until a live run proves it.
-	capabilities: { resume: true, schema: true, models: false, efforts: ["low", "medium", "high", "xhigh"] },
+	// The model cache of the Codex Desktop app lists the efforts low to max (and
+	// ultra). All five are passed on. The service decides what a model accepts.
+	capabilities: { resume: true, schema: true, models: false, efforts: [...EFFORTS] },
 
 	resolve(env) {
 		return resolveNamed("codex", env, { npmShim: true });
+	},
+
+	// Several Codex programs can exist on one machine. Live evidence (H3): the
+	// npm and ~/.local/bin copies (0.154.0) were refused by the service for the
+	// model of the account, and the Codex Desktop copy (0.167.0-alpha.4.1) was
+	// accepted. `diagnose` picks the highest version among these.
+	candidates(env) {
+		return codexCandidates(env);
 	},
 
 	buildInvocation(request, ctx) {
@@ -86,7 +97,7 @@ const adapter = {
 
 		if (result.code !== 0 || turnFailure) {
 			const detail = `${turnFailure ?? lastError ?? ""}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			return { ...failure(code, `Codex failed with code ${result.code}. ${tailText(detail)}`), ...common };
 		}
 
@@ -95,7 +106,7 @@ const adapter = {
 		const text = typeof fromFile === "string" && fromFile.trim() ? fromFile.trimEnd() : lastAgentMessage;
 		if (!text && lastError) {
 			// Exit 0, no answer, but an `error` event: report the error, not "bad output".
-			const code = looksUnauthenticated(lastError) ? "not-authenticated" : "target-error";
+			const code = failureCode(lastError);
 			return { ...failure(code, `Codex finished without a final message. ${tailText(lastError)}`), ...common };
 		}
 		if (!text) {

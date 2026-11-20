@@ -15,6 +15,8 @@ const EXIT_CODES = {
 	timeout: 1,
 	"bad-output": 1,
 	"not-authenticated": 1,
+	"permission-denied": 1,
+	"usage-limit": 1,
 	usage: 2,
 	"prompt-too-long": 2,
 	"not-installed": 3,
@@ -29,6 +31,11 @@ export class DispatchError extends Error {
 		this.name = "DispatchError";
 		this.code = code;
 	}
+}
+
+/** The `denied_actions` of an envelope: an array of non-empty strings. */
+function normalizeDenied(list) {
+	return Array.isArray(list) ? list.filter((item) => typeof item === "string" && item.trim() !== "") : [];
 }
 
 /** Exit code of `hd` for an error object, or 0 for no error. */
@@ -86,6 +93,7 @@ export function buildEnvelope(fields = {}) {
 		duration_ms: Number.isFinite(fields.duration_ms) ? Math.round(fields.duration_ms) : 0,
 		exit_code: exitCodeFor(error),
 		error,
+		denied_actions: normalizeDenied(fields.denied_actions),
 		log_file: fields.log_file ?? null,
 	};
 }

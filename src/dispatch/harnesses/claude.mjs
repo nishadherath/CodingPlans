@@ -12,7 +12,7 @@
 // named `synthetic-*` hold the expected shape.
 
 import { DispatchError } from "../envelope.mjs";
-import { looksUnauthenticated, parseJsonLoose, pickNumber, pickString, tailText } from "../parse.mjs";
+import { failureCode, parseJsonLoose, pickNumber, pickString, tailText } from "../parse.mjs";
 import { EFFORTS } from "../request.mjs";
 import { resolveNamed } from "../resolve.mjs";
 
@@ -56,7 +56,7 @@ const adapter = {
 		if (!object || typeof object !== "object") {
 			const text = `${result.stderr}\n${result.stdout}`;
 			if (result.code !== 0) {
-				return failure(looksUnauthenticated(text) ? "not-authenticated" : "target-error", `Claude Code exited with code ${result.code}. ${tailText(text)}`);
+				return failure(failureCode(text), `Claude Code exited with code ${result.code}. ${tailText(text)}`);
 			}
 			return failure("bad-output", "Claude Code did not print one JSON object on stdout.");
 		}
@@ -79,7 +79,7 @@ const adapter = {
 		const answer = pickString(object.result);
 		if (object.is_error === true || result.code !== 0) {
 			const detail = `${answer ?? ""}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			return { ...failure(code, `Claude Code reported an error. ${tailText(detail)}`), ...common };
 		}
 		const structured = object.structured_output ?? null;

@@ -46,7 +46,7 @@ test("envelope has the fields and the order of the contract", () => {
 	const envelope = buildEnvelope({ harness: "codex", text: "hi" });
 	assert.deepEqual(Object.keys(envelope), [
 		"schema", "ok", "harness", "model", "effort", "access", "session_id", "text", "structured",
-		"truncated", "usage", "cost_usd", "duration_ms", "exit_code", "error", "log_file",
+		"truncated", "usage", "cost_usd", "duration_ms", "exit_code", "error", "denied_actions", "log_file",
 	]);
 	assert.equal(envelope.schema, "harness-dispatch/1");
 	assert.deepEqual(Object.keys(envelope.usage), ["input_tokens", "output_tokens", "cache_read_tokens", "reasoning_tokens", "total_tokens"]);

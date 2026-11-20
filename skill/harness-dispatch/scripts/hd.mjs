@@ -140,7 +140,50 @@ const UNAUTHENTICATED =
 function looksUnauthenticated(text) {
 	return UNAUTHENTICATED.test(String(text ?? ""));
 }
-return { redact, tailText, parseJsonLoose, parseJsonLines, unwrapMessage, pickNumber, pickString, looksUnauthenticated };
+
+// Usage and rate limits. A real Codex run printed "You've hit your usage limit.
+// Visit .../settings/usage to purchase more credits or try again at 12:10 PM."
+// The other phrases are the common wording of the other services.
+const USAGE_LIMIT =
+	/usage\s+limit|rate[\s-]?limit|quota\s+(?:exceeded|exhausted|reached)|exceeded\s+your\s+(?:\w+\s+)?quota|too\s+many\s+requests|\b429\b|hit\s+your\s+(?:\w+\s+)?limit|limit\s+reached/i;
+
+/**
+ * True when the text of a FAILED run reports a usage or rate limit.
+ * Never call it on the answer of a successful run.
+ */
+function looksUsageLimited(text) {
+	return USAGE_LIMIT.test(String(text ?? ""));
+}
+
+/**
+ * The `error.code` for a failed run, from its text. A limit is checked before
+ * a sign-in problem: the wording is more specific, and the caller must not
+ * dispatch again to that target (SKILL.md).
+ */
+function failureCode(text) {
+	if (looksUsageLimited(text)) return "usage-limit";
+	return looksUnauthenticated(text) ? "not-authenticated" : "target-error";
+}
+
+/**
+ * Text for the `denied_actions` of a target: "command: Bash".
+ * `agy` prints an array of `{ action, display_name }`. Anything else gives [].
+ */
+function deniedActions(list) {
+	if (!Array.isArray(list)) return [];
+	const texts = [];
+	for (const item of list) {
+		if (typeof item === "string" && item.trim()) texts.push(redact(item.trim()));
+		else if (item && typeof item === "object") {
+			const action = pickString(item.action);
+			const name = pickString(item.display_name, item.displayName, item.name);
+			if (action && name) texts.push(redact(`${action}: ${name}`));
+			else if (action || name) texts.push(redact(action ?? name));
+		}
+	}
+	return texts;
+}
+return { redact, tailText, parseJsonLoose, parseJsonLines, unwrapMessage, pickNumber, pickString, looksUnauthenticated, looksUsageLimited, failureCode, deniedActions };
 })();
 
 // ======================================================================
@@ -163,6 +206,8 @@ const EXIT_CODES = {
 	timeout: 1,
 	"bad-output": 1,
 	"not-authenticated": 1,
+	"permission-denied": 1,
+	"usage-limit": 1,
 	usage: 2,
 	"prompt-too-long": 2,
 	"not-installed": 3,
@@ -177,6 +222,11 @@ class DispatchError extends Error {
 		this.name = "DispatchError";
 		this.code = code;
 	}
+}
+
+/** The `denied_actions` of an envelope: an array of non-empty strings. */
+function normalizeDenied(list) {
+	return Array.isArray(list) ? list.filter((item) => typeof item === "string" && item.trim() !== "") : [];
 }
 
 /** Exit code of `hd` for an error object, or 0 for no error. */
@@ -234,6 +284,7 @@ function buildEnvelope(fields = {}) {
 		duration_ms: Number.isFinite(fields.duration_ms) ? Math.round(fields.duration_ms) : 0,
 		exit_code: exitCodeFor(error),
 		error,
+		denied_actions: normalizeDenied(fields.denied_actions),
 		log_file: fields.log_file ?? null,
 	};
 }
@@ -973,6 +1024,11 @@ __ns_src_dispatch_resolve_mjs = (() => {
 // shell. On Windows a bare name such as `codex` resolves to an npm shim
 // (`codex.cmd`) that Node cannot start by name. The helpers here find a real
 // executable, or a way to start the same program without the shim.
+//
+// Several copies of one target can exist on a machine (live evidence, H3: three
+// Codex copies, of two versions). `diagnose` collects the candidates of a
+// target and takes the one with the highest version. The variable
+// HARNESS_DISPATCH_<ID>_PATH overrides the whole search.
 
 
 
@@ -980,6 +1036,9 @@ __ns_src_dispatch_resolve_mjs = (() => {
 const { findAllOnPath, findSpawnableOnPath } = __ns_src_detect_cli_mjs;
 
 const isWindows = process.platform === "win32";
+
+/** Versions that were read in this process. One `--version` run for each program. */
+const PROCESS_VERSION_CACHE = new Map();
 
 function isExecutableFile(candidate) {
 	try {
@@ -991,13 +1050,17 @@ function isExecutableFile(candidate) {
 	}
 }
 
+function homeOf(env) {
+	return env.USERPROFILE || env.HOME || homedir();
+}
+
 /**
  * Per-user install folders that hold real executables. The home folder comes
  * from the given environment, not from the real account, so that a test can
  * point it at an empty folder.
  */
 function userFolders(name, env) {
-	const home = env.USERPROFILE || env.HOME || homedir();
+	const home = homeOf(env);
 	const folders = [join(home, ".local", "bin")];
 	if (name === "claude") folders.push(join(home, ".claude", "local"));
 	if (isWindows) folders.push(join(home, "AppData", "Local", "Programs", name));
@@ -1005,26 +1068,74 @@ function userFolders(name, env) {
 }
 
 /**
- * Find a way to start a program by its name.
+ * Every way to start a program by its name, most preferred first.
  *
- * Order: a real executable on PATH; then, with `npmShim`, the entry file of an
- * npm `.cmd` shim; then `extraDirs` (for installs that do not edit PATH, such
- * as `%LOCALAPPDATA%\agy\bin`); then the per-user install folders.
+ * Order: each real executable on PATH; then, with `npmShim`, the entry file of
+ * each npm `.cmd` shim; then `extraDirs` (for installs that do not edit PATH,
+ * such as `%LOCALAPPDATA%\agy\bin`); then the per-user install folders. A
+ * program that two sources name is listed one time.
+ *
+ * @returns {{ command: string, prefixArgs: string[], via: string }[]}
+ */
+function resolveAll(name, env = process.env, { extraDirs = [], npmShim = false } = {}) {
+	const found = [];
+	for (const entry of findAllOnPath(name, env)) {
+		if (entry.spawnable) found.push({ command: entry.path, prefixArgs: [], via: "path" });
+	}
+	if (npmShim) found.push(...resolveNpmShims(name, env));
+	for (const dir of [...extraDirs, ...userFolders(name, env)]) {
+		const candidate = join(dir, isWindows ? `${name}.exe` : name);
+		if (isExecutableFile(candidate)) found.push({ command: candidate, prefixArgs: [], via: "known-folder" });
+	}
+	return dedupe(found);
+}
+
+/**
+ * Find a way to start a program by its name: the first of `resolveAll`.
  *
  * @returns {{ command: string, prefixArgs: string[], via: string } | undefined}
  */
-function resolveNamed(name, env = process.env, { extraDirs = [], npmShim = false } = {}) {
+function resolveNamed(name, env = process.env, options = {}) {
+	// The PATH search stops at the first real executable, as before.
 	const onPath = findSpawnableOnPath(name, env);
 	if (onPath) return { command: onPath, prefixArgs: [], via: "path" };
-	if (npmShim) {
-		const shim = resolveNpmShim(name, env);
-		if (shim) return shim;
+	return resolveAll(name, env, options)[0];
+}
+
+/**
+ * Candidates for Codex: the generic list, and the copies that the Codex
+ * Desktop app keeps at `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe`.
+ * The app copy can be newer than the npm copy.
+ */
+function codexCandidates(env = process.env) {
+	const found = resolveAll("codex", env, { npmShim: true });
+	if (isWindows) {
+		const local = env.LOCALAPPDATA || join(homeOf(env), "AppData", "Local");
+		const root = join(local, "OpenAI", "Codex", "bin");
+		let folders = [];
+		try {
+			folders = readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+		} catch {
+			// The folder does not exist: no Desktop copy.
+		}
+		for (const folder of folders) {
+			const candidate = join(root, folder, "codex.exe");
+			if (isExecutableFile(candidate)) found.push({ command: candidate, prefixArgs: [], via: "codex-desktop" });
+		}
 	}
-	for (const dir of [...extraDirs, ...userFolders(name, env)]) {
-		const candidate = join(dir, isWindows ? `${name}.exe` : name);
-		if (isExecutableFile(candidate)) return { command: candidate, prefixArgs: [], via: "known-folder" };
-	}
-	return undefined;
+	return dedupe(found);
+}
+
+/** Remove a candidate that has the same command and arguments as an earlier one. */
+function dedupe(candidates) {
+	const seen = new Set();
+	return candidates.filter((candidate) => {
+		const key = [candidate.command, ...candidate.prefixArgs].join("\0");
+		const normal = isWindows ? key.toLowerCase() : key;
+		if (seen.has(normal)) return false;
+		seen.add(normal);
+		return true;
+	});
 }
 
 /**
@@ -1040,58 +1151,152 @@ function parseCmdShim(text, cmdDir) {
 }
 
 /**
- * Start a package that npm installed as `<name>.cmd`, without the shim.
+ * Every package that npm installed as `<name>.cmd`, started without the shim.
  * The command is this Node program. The first argument is the package entry.
  * This is the official launcher of the package, so no copy of a binary is
  * needed.
  */
-function resolveNpmShim(name, env = process.env) {
+function resolveNpmShims(name, env = process.env) {
+	const found = [];
 	for (const entry of findAllOnPath(name, env)) {
 		if (entry.suffix.toLowerCase() !== ".cmd") continue;
 		try {
 			const entryFile = parseCmdShim(readFileSync(entry.path, "utf8"), dirname(entry.path));
 			if (entryFile && existsSync(entryFile)) {
-				return { command: process.execPath, prefixArgs: [entryFile], via: "npm-shim" };
+				found.push({ command: process.execPath, prefixArgs: [entryFile], via: "npm-shim" });
 			}
 		} catch {
 			// An unreadable shim is skipped.
 		}
 	}
-	return undefined;
+	return found;
+}
+
+/** The first entry of `resolveNpmShims`, or undefined. */
+function resolveNpmShim(name, env = process.env) {
+	return resolveNpmShims(name, env)[0];
+}
+
+const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/;
+
+/**
+ * Compare two version texts by the rules of semantic versioning: the numbers
+ * first, as numbers; a pre-release is lower than the same release; build
+ * metadata is ignored. A text that is not a version is lower than any version.
+ *
+ * @returns {-1 | 0 | 1}
+ */
+function compareVersions(a, b) {
+	const left = VERSION_PATTERN.exec(String(a ?? ""));
+	const right = VERSION_PATTERN.exec(String(b ?? ""));
+	if (!left || !right) return left ? 1 : right ? -1 : 0;
+	for (let i = 1; i <= 3; i++) {
+		const difference = Number(left[i]) - Number(right[i]);
+		if (difference !== 0) return difference > 0 ? 1 : -1;
+	}
+	if (!left[4] && !right[4]) return 0;
+	if (!left[4]) return 1;
+	if (!right[4]) return -1;
+	const leftIds = left[4].split(".");
+	const rightIds = right[4].split(".");
+	for (let i = 0; i < Math.max(leftIds.length, rightIds.length); i++) {
+		const x = leftIds[i];
+		const y = rightIds[i];
+		if (x === undefined) return -1;
+		if (y === undefined) return 1;
+		const xNumber = /^\d+$/.test(x);
+		const yNumber = /^\d+$/.test(y);
+		if (xNumber && yNumber && Number(x) !== Number(y)) return Number(x) > Number(y) ? 1 : -1;
+		if (xNumber !== yNumber) return xNumber ? -1 : 1;
+		if (!xNumber && x !== y) return x > y ? 1 : -1;
+	}
+	return 0;
+}
+
+/** The name of the override variable of a target, for example HARNESS_DISPATCH_CODEX_PATH. */
+function overrideName(adapter) {
+	return `HARNESS_DISPATCH_${adapter.id.toUpperCase()}_PATH`;
 }
 
 /**
  * Resolve one target.
  *
- * @returns {{ state: "ok", command: string, prefixArgs: string[], via: string }
- *   | { state: "not-installed" | "not-startable", message: string }}
+ * 1. The override variable, when set: an absolute path, used as given.
+ * 2. Else the candidates of the adapter (`candidates(env)`, or the one result
+ *    of `resolve(env)`). With more than one, each gets `--version` one time for
+ *    each cache, and the highest version wins. A candidate that cannot answer
+ *    is skipped. A tie goes to the earlier candidate.
+ *
+ * @param {object} [options]
+ * @param {Function} [options.exec]  `execute` or a test double, for the version probe.
+ * @param {Map} [options.versionCache]  Versions already read. Default: the process cache.
+ * @returns {Promise<{ state: "ok", command: string, prefixArgs: string[], via: string, version?: string | null }
+ *   | { state: "usage" | "not-installed" | "not-startable", message: string }>}
  */
-function diagnose(adapter, env = process.env) {
-	const found = adapter.resolve(env);
-	if (found) return { state: "ok", ...found };
-	// A shim that we cannot read is "installed, but not startable".
-	if (findAllOnPath(adapter.cli, env).length > 0) {
-		return {
-			state: "not-startable",
-			message: `${adapter.name} is installed, but only as a shim that this tool cannot start without a shell.`,
-		};
+async function diagnose(adapter, env = process.env, { exec, versionCache = PROCESS_VERSION_CACHE } = {}) {
+	const variable = overrideName(adapter);
+	const override = env[variable];
+	if (typeof override === "string" && override !== "") {
+		if (!isAbsolute(override)) {
+			return { state: "usage", message: `${variable} must be an absolute path. Got a relative path.` };
+		}
+		if (!isExecutableFile(override)) {
+			return { state: "not-installed", message: `${variable} names a file that does not exist or cannot run.` };
+		}
+		if (isWindows && /\.(?:cmd|bat)$/i.test(override)) {
+			return { state: "not-startable", message: `${variable} names a shell script. Name a real executable.` };
+		}
+		return { state: "ok", command: override, prefixArgs: [], via: "env" };
 	}
-	return { state: "not-installed", message: `${adapter.name} is not installed. Program name: ${adapter.cli}.` };
+
+	const candidates = adapter.candidates ? adapter.candidates(env) : [adapter.resolve(env)].filter(Boolean);
+	if (candidates.length === 0) {
+		// A shim that we cannot read is "installed, but not startable".
+		if (findAllOnPath(adapter.cli, env).length > 0) {
+			return {
+				state: "not-startable",
+				message: `${adapter.name} is installed, but only as a shim that this tool cannot start without a shell.`,
+			};
+		}
+		return { state: "not-installed", message: `${adapter.name} is not installed. Program name: ${adapter.cli}.` };
+	}
+	if (candidates.length === 1 || !exec) return { state: "ok", ...candidates[0] };
+
+	const probes = await Promise.all(candidates.map((candidate) => readVersion(candidate, exec, adapter.versionArgs, versionCache)));
+	let best = -1;
+	for (let i = 0; i < candidates.length; i++) {
+		if (!probes[i].startable) continue;
+		if (best < 0 || compareVersions(probes[i].version, probes[best].version) > 0) best = i;
+	}
+	if (best < 0) return { state: "ok", ...candidates[0] };
+	return { state: "ok", ...candidates[best], version: probes[best].version };
 }
 
 /**
  * Ask a target for its version. This is not a model call.
+ * With a `cache`, one program is asked one time for each cache.
  *
- * @param {object} found  The `ok` result of `diagnose`.
+ * @param {object} found  The `ok` result of `diagnose`, or a candidate.
  * @param {Function} exec  `execute` or a test double.
+ * @param {string[]} [versionArgs]
+ * @param {Map} [cache]
  */
-async function readVersion(found, exec, versionArgs = ["--version"]) {
+async function readVersion(found, exec, versionArgs = ["--version"], cache) {
+	const key = [found.command, ...found.prefixArgs, ...versionArgs].join("\0");
+	if (cache?.has(key)) return cache.get(key);
+	const pending = probeVersion(found, exec, versionArgs);
+	// A pending promise is cached, so that two callers at once run one probe.
+	cache?.set(key, pending);
+	return pending;
+}
+
+async function probeVersion(found, exec, versionArgs) {
 	const result = await exec(found.command, [...found.prefixArgs, ...versionArgs], { timeoutMs: 20_000, killTree: true });
 	if (result.spawnError || result.timedOut) return { startable: false, version: null };
 	const match = /(\d+\.\d+\.\d+(?:[-+][\w.]+)?)/.exec(`${result.stdout}\n${result.stderr}`);
 	return { startable: result.code === 0, version: match ? match[1] : null };
 }
-return { resolveNamed, parseCmdShim, resolveNpmShim, diagnose, readVersion };
+return { PROCESS_VERSION_CACHE, resolveAll, resolveNamed, codexCandidates, parseCmdShim, resolveNpmShims, resolveNpmShim, compareVersions, overrideName, diagnose, readVersion };
 })();
 
 // ======================================================================
@@ -1103,27 +1308,32 @@ __ns_src_dispatch_harnesses_antigravity_mjs = (() => {
 //   -p <prompt>            print mode: one prompt, one run
 //   --output-format json   one JSON object on stdout
 //   --print-timeout <d>    time limit of the run, a Go duration such as 600s
-//   --mode                 plan (read-only task) | accept-edits (write)
+//   --mode                 plan (advice only) | accept-edits (write)
+//   --sandbox              terminal restrictions: stops writes at the OS level
 //   --conversation <id>    continue a conversation
 //   --json-schema <path>   JSON Schema (a path or the schema text)
 // The prompt is an argument of `-p`, so it is limited in length. A longer
 // prompt is refused. The `stream-json` mode would lift this limit. It is a
 // later extension.
 //
-// Not verified by a live run: that `-p` takes the prompt as its value, and the
-// JSON field names. The help text does not say that `-p` takes a value.
+// Verified by live runs (H3): `-p` takes the prompt, `--conversation` resumes,
+// `--json-schema` fills `structured_output`, and `--mode accept-edits` writes.
 //
 // `agy` installs to %LOCALAPPDATA%\agy\bin and may be missing from PATH in a
 // shell that started before the install.
 
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
-const { looksUnauthenticated, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
+const { deniedActions, failureCode, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
 const { EFFORTS } = __ns_src_dispatch_request_mjs;
 const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
 const MAX_PROMPT_CHARS = 24000;
-const MODE = { read: "plan", write: "accept-edits" };
+// Read access is "--mode plan --sandbox". Live evidence (H3, 2026-11-20): plan
+// mode is advice to the model. A forceful prompt ran a command that an allow
+// rule approved, and the command wrote a file. "--sandbox" stops the write at
+// the OS level and still lets read-only commands run.
+const MODE_ARGS = { read: ["--mode", "plan", "--sandbox"], write: ["--mode", "accept-edits"] };
 
 const adapter = {
 	id: "antigravity",
@@ -1137,8 +1347,8 @@ const adapter = {
 	},
 
 	buildInvocation(request) {
-		const mode = MODE[request.access];
-		if (!mode) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
+		const modeArgs = MODE_ARGS[request.access];
+		if (!modeArgs) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
 		if (request.prompt.length > MAX_PROMPT_CHARS) {
 			throw new DispatchError(
 				"prompt-too-long",
@@ -1148,7 +1358,7 @@ const adapter = {
 		const args = ["-p", request.prompt, "--output-format", "json", "--print-timeout", `${request.timeoutSec}s`];
 		if (request.model) args.push("--model", request.model);
 		if (request.effort) args.push("--effort", request.effort);
-		args.push("--mode", mode);
+		args.push(...modeArgs);
 		if (request.resume) args.push("--conversation", request.resume);
 		if (request.schema) args.push("--json-schema", request.schema.path);
 		return { args, stdin: null, tempFiles: [] };
@@ -1159,16 +1369,18 @@ const adapter = {
 		if (!object || Array.isArray(object)) {
 			const text = `${result.stderr}\n${result.stdout}`;
 			if (result.code !== 0) {
-				return failure(looksUnauthenticated(text) ? "not-authenticated" : "target-error", `Antigravity exited with code ${result.code}. ${tailText(text)}`);
+				return failure(failureCode(text), `Antigravity exited with code ${result.code}. ${tailText(text)}`);
 			}
 			return failure("bad-output", "Antigravity did not print one JSON object on stdout.");
 		}
 
 		const usage = object.usage ?? {};
+		const denied = deniedActions(object.denied_actions);
 		const common = {
 			session_id: pickString(object.conversation_id),
 			model: null,
 			cost_usd: null,
+			denied_actions: denied,
 			usage: {
 				input_tokens: pickNumber(usage.input_tokens),
 				output_tokens: pickNumber(usage.output_tokens),
@@ -1178,11 +1390,25 @@ const adapter = {
 			},
 		};
 
+		// Headless mode cannot ask for a permission. The tool call is denied, the
+		// run ends with status SUCCESS and an empty answer, and `denied_actions`
+		// names what was needed. That is a failure of the task, not an answer.
+		// The stderr text suggests a bypass flag. It is not copied to the message.
+		if (denied.length > 0 && pickString(object.response) === null && (object.structured_output ?? null) === null) {
+			return {
+				...failure(
+					"permission-denied",
+					`Antigravity made no answer. It needed permission for: ${denied.join(", ")}. It runs headless and cannot ask. The operator can add an allow rule in the permissions.allow list of the Antigravity settings, for example command(<program>).`,
+				),
+				...common,
+			};
+		}
+
 		// Good only with exit code 0 and status SUCCESS (contract section 7.3).
 		if (result.code !== 0 || object.status !== "SUCCESS") {
 			const reported = typeof object.error === "string" ? object.error : pickString(object.error?.message) ?? "";
 			const detail = `${reported}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			const status = pickString(object.status) ?? "unknown";
 			return { ...failure(code, `Antigravity failed. Exit code ${result.code}, status ${status}. ${tailText(detail)}`), ...common };
 		}
@@ -1235,7 +1461,7 @@ __ns_src_dispatch_harnesses_claude_mjs = (() => {
 // named `synthetic-*` hold the expected shape.
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
-const { looksUnauthenticated, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
+const { failureCode, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
 const { EFFORTS } = __ns_src_dispatch_request_mjs;
 const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
@@ -1279,7 +1505,7 @@ const adapter = {
 		if (!object || typeof object !== "object") {
 			const text = `${result.stderr}\n${result.stdout}`;
 			if (result.code !== 0) {
-				return failure(looksUnauthenticated(text) ? "not-authenticated" : "target-error", `Claude Code exited with code ${result.code}. ${tailText(text)}`);
+				return failure(failureCode(text), `Claude Code exited with code ${result.code}. ${tailText(text)}`);
 			}
 			return failure("bad-output", "Claude Code did not print one JSON object on stdout.");
 		}
@@ -1302,7 +1528,7 @@ const adapter = {
 		const answer = pickString(object.result);
 		if (object.is_error === true || result.code !== 0) {
 			const detail = `${answer ?? ""}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			return { ...failure(code, `Claude Code reported an error. ${tailText(detail)}`), ...common };
 		}
 		const structured = object.structured_output ?? null;
@@ -1348,12 +1574,14 @@ __ns_src_dispatch_harnesses_codex_mjs = (() => {
 // resolver prefers a real `codex.exe` on PATH, then starts the package entry
 // file with this Node program (the official launcher).
 //
-// Not verified by a live run: the event names and the usage field names.
-// The parser accepts the known variants of the usage names.
+// Failure events were seen in live runs (H3). Not verified by a live run: the
+// success events and the usage field names. The parser accepts the known
+// variants of the usage names.
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
-const { looksUnauthenticated, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } = __ns_src_dispatch_parse_mjs;
-const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
+const { failureCode, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } = __ns_src_dispatch_parse_mjs;
+const { EFFORTS } = __ns_src_dispatch_request_mjs;
+const { codexCandidates, resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
 const SANDBOX = { read: "read-only", write: "workspace-write" };
 
@@ -1361,11 +1589,20 @@ const adapter = {
 	id: "codex",
 	name: "OpenAI Codex CLI",
 	cli: "codex",
-	// `max` is not in the Codex help text. It is left out until a live run proves it.
-	capabilities: { resume: true, schema: true, models: false, efforts: ["low", "medium", "high", "xhigh"] },
+	// The model cache of the Codex Desktop app lists the efforts low to max (and
+	// ultra). All five are passed on. The service decides what a model accepts.
+	capabilities: { resume: true, schema: true, models: false, efforts: [...EFFORTS] },
 
 	resolve(env) {
 		return resolveNamed("codex", env, { npmShim: true });
+	},
+
+	// Several Codex programs can exist on one machine. Live evidence (H3): the
+	// npm and ~/.local/bin copies (0.154.0) were refused by the service for the
+	// model of the account, and the Codex Desktop copy (0.167.0-alpha.4.1) was
+	// accepted. `diagnose` picks the highest version among these.
+	candidates(env) {
+		return codexCandidates(env);
 	},
 
 	buildInvocation(request, ctx) {
@@ -1419,7 +1656,7 @@ const adapter = {
 
 		if (result.code !== 0 || turnFailure) {
 			const detail = `${turnFailure ?? lastError ?? ""}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			return { ...failure(code, `Codex failed with code ${result.code}. ${tailText(detail)}`), ...common };
 		}
 
@@ -1428,7 +1665,7 @@ const adapter = {
 		const text = typeof fromFile === "string" && fromFile.trim() ? fromFile.trimEnd() : lastAgentMessage;
 		if (!text && lastError) {
 			// Exit 0, no answer, but an `error` event: report the error, not "bad output".
-			const code = looksUnauthenticated(lastError) ? "not-authenticated" : "target-error";
+			const code = failureCode(lastError);
 			return { ...failure(code, `Codex finished without a final message. ${tailText(lastError)}`), ...common };
 		}
 		if (!text) {
@@ -1504,13 +1741,14 @@ const { execute } = __ns_src_util_exec_mjs;
 const { SCHEMA, buildEnvelope, errorEnvelope, DispatchError, truncateText } = __ns_src_dispatch_envelope_mjs;
 const { checkDepth, withDepth } = __ns_src_dispatch_guard_mjs;
 const { HARNESSES, getHarness } = __ns_src_dispatch_harnesses_index_mjs;
-const { diagnose, readVersion } = __ns_src_dispatch_resolve_mjs;
+const { PROCESS_VERSION_CACHE, diagnose, readVersion } = __ns_src_dispatch_resolve_mjs;
 
 /** The real effects. A test replaces any of them. */
 function defaultDeps() {
 	return {
 		env: process.env,
 		exec: execute,
+		versionCache: PROCESS_VERSION_CACHE,
 		now: () => Date.now(),
 		tmpRoot: tmpdir(),
 		randomId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1585,7 +1823,7 @@ async function dispatch(request, overrides = {}) {
 	}
 	if (!deps.isDirectory(request.cwd)) return fail("usage", `The working directory does not exist: ${request.cwd}`);
 
-	const found = diagnose(adapter, deps.env);
+	const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 	if (found.state !== "ok") return fail(found.state, found.message);
 
 	// Temp files live in one folder for this run. The folder is deleted at the end.
@@ -1653,6 +1891,7 @@ async function dispatch(request, overrides = {}) {
 			truncated: cut.truncated,
 			usage: parsed.usage ?? undefined,
 			cost_usd: parsed.cost_usd,
+			denied_actions: parsed.denied_actions,
 			error: parsed.ok === true ? null : { code: parsed.error?.code ?? "target-error", message: parsed.error?.message ?? "The target failed." },
 			...after,
 		});
@@ -1673,10 +1912,10 @@ async function listTargets(overrides = {}) {
 	const deps = { ...defaultDeps(), ...overrides };
 	const targets = [];
 	for (const adapter of HARNESSES) {
-		const found = diagnose(adapter, deps.env);
+		const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 		const entry = { id: adapter.id, name: adapter.name, cli: adapter.cli, installed: found.state !== "not-installed", startable: false, executable: null, via: null, version: null };
 		if (found.state === "ok") {
-			const probe = await readVersion(found, deps.exec, adapter.versionArgs);
+			const probe = await readVersion(found, deps.exec, adapter.versionArgs, deps.versionCache);
 			Object.assign(entry, { startable: probe.startable, executable: found.command, via: found.via, version: probe.version });
 		}
 		targets.push(entry);
@@ -1694,14 +1933,14 @@ async function doctor(selection, overrides = {}) {
 	const adapters = selection ? [getHarness(selection)] : HARNESSES;
 	const checks = [];
 	for (const adapter of adapters) {
-		const found = diagnose(adapter, deps.env);
+		const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 		const check = { id: adapter.id, installed: found.state !== "not-installed", startable: false, authenticated: null, version: null, notes: [] };
 		if (found.state !== "ok") {
 			check.notes.push(found.message);
 			checks.push(check);
 			continue;
 		}
-		const probe = await readVersion(found, deps.exec, adapter.versionArgs);
+		const probe = await readVersion(found, deps.exec, adapter.versionArgs, deps.versionCache);
 		check.startable = probe.startable;
 		check.version = probe.version;
 		if (!probe.startable) check.notes.push(`${adapter.name} did not answer --version.`);
@@ -1727,7 +1966,7 @@ async function listModels(id, overrides = {}) {
 	if (!adapter?.listModels) {
 		return done({ ok: true, exit_code: 0, note: "This target has no model list command. Pass a model id with --model." });
 	}
-	const found = diagnose(adapter, deps.env);
+	const found = await diagnose(adapter, deps.env, { exec: deps.exec, versionCache: deps.versionCache });
 	if (found.state !== "ok") return done({ ok: false, exit_code: 3, error: { code: found.state, message: found.message } });
 	const result = await deps.exec(found.command, [...found.prefixArgs, ...adapter.listModels.args], { timeoutMs: 30_000, killTree: true });
 	if (result.spawnError || result.timedOut || result.code !== 0) {

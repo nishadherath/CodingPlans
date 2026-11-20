@@ -4,27 +4,32 @@
 //   -p <prompt>            print mode: one prompt, one run
 //   --output-format json   one JSON object on stdout
 //   --print-timeout <d>    time limit of the run, a Go duration such as 600s
-//   --mode                 plan (read-only task) | accept-edits (write)
+//   --mode                 plan (advice only) | accept-edits (write)
+//   --sandbox              terminal restrictions: stops writes at the OS level
 //   --conversation <id>    continue a conversation
 //   --json-schema <path>   JSON Schema (a path or the schema text)
 // The prompt is an argument of `-p`, so it is limited in length. A longer
 // prompt is refused. The `stream-json` mode would lift this limit. It is a
 // later extension.
 //
-// Not verified by a live run: that `-p` takes the prompt as its value, and the
-// JSON field names. The help text does not say that `-p` takes a value.
+// Verified by live runs (H3): `-p` takes the prompt, `--conversation` resumes,
+// `--json-schema` fills `structured_output`, and `--mode accept-edits` writes.
 //
 // `agy` installs to %LOCALAPPDATA%\agy\bin and may be missing from PATH in a
 // shell that started before the install.
 
 import { join } from "node:path";
 import { DispatchError } from "../envelope.mjs";
-import { looksUnauthenticated, parseJsonLoose, pickNumber, pickString, tailText } from "../parse.mjs";
+import { deniedActions, failureCode, parseJsonLoose, pickNumber, pickString, tailText } from "../parse.mjs";
 import { EFFORTS } from "../request.mjs";
 import { resolveNamed } from "../resolve.mjs";
 
 export const MAX_PROMPT_CHARS = 24000;
-const MODE = { read: "plan", write: "accept-edits" };
+// Read access is "--mode plan --sandbox". Live evidence (H3, 2026-11-20): plan
+// mode is advice to the model. A forceful prompt ran a command that an allow
+// rule approved, and the command wrote a file. "--sandbox" stops the write at
+// the OS level and still lets read-only commands run.
+const MODE_ARGS = { read: ["--mode", "plan", "--sandbox"], write: ["--mode", "accept-edits"] };
 
 const adapter = {
 	id: "antigravity",
@@ -38,8 +43,8 @@ const adapter = {
 	},
 
 	buildInvocation(request) {
-		const mode = MODE[request.access];
-		if (!mode) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
+		const modeArgs = MODE_ARGS[request.access];
+		if (!modeArgs) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
 		if (request.prompt.length > MAX_PROMPT_CHARS) {
 			throw new DispatchError(
 				"prompt-too-long",
@@ -49,7 +54,7 @@ const adapter = {
 		const args = ["-p", request.prompt, "--output-format", "json", "--print-timeout", `${request.timeoutSec}s`];
 		if (request.model) args.push("--model", request.model);
 		if (request.effort) args.push("--effort", request.effort);
-		args.push("--mode", mode);
+		args.push(...modeArgs);
 		if (request.resume) args.push("--conversation", request.resume);
 		if (request.schema) args.push("--json-schema", request.schema.path);
 		return { args, stdin: null, tempFiles: [] };
@@ -60,16 +65,18 @@ const adapter = {
 		if (!object || Array.isArray(object)) {
 			const text = `${result.stderr}\n${result.stdout}`;
 			if (result.code !== 0) {
-				return failure(looksUnauthenticated(text) ? "not-authenticated" : "target-error", `Antigravity exited with code ${result.code}. ${tailText(text)}`);
+				return failure(failureCode(text), `Antigravity exited with code ${result.code}. ${tailText(text)}`);
 			}
 			return failure("bad-output", "Antigravity did not print one JSON object on stdout.");
 		}
 
 		const usage = object.usage ?? {};
+		const denied = deniedActions(object.denied_actions);
 		const common = {
 			session_id: pickString(object.conversation_id),
 			model: null,
 			cost_usd: null,
+			denied_actions: denied,
 			usage: {
 				input_tokens: pickNumber(usage.input_tokens),
 				output_tokens: pickNumber(usage.output_tokens),
@@ -79,11 +86,25 @@ const adapter = {
 			},
 		};
 
+		// Headless mode cannot ask for a permission. The tool call is denied, the
+		// run ends with status SUCCESS and an empty answer, and `denied_actions`
+		// names what was needed. That is a failure of the task, not an answer.
+		// The stderr text suggests a bypass flag. It is not copied to the message.
+		if (denied.length > 0 && pickString(object.response) === null && (object.structured_output ?? null) === null) {
+			return {
+				...failure(
+					"permission-denied",
+					`Antigravity made no answer. It needed permission for: ${denied.join(", ")}. It runs headless and cannot ask. The operator can add an allow rule in the permissions.allow list of the Antigravity settings, for example command(<program>).`,
+				),
+				...common,
+			};
+		}
+
 		// Good only with exit code 0 and status SUCCESS (contract section 7.3).
 		if (result.code !== 0 || object.status !== "SUCCESS") {
 			const reported = typeof object.error === "string" ? object.error : pickString(object.error?.message) ?? "";
 			const detail = `${reported}\n${result.stderr}`;
-			const code = looksUnauthenticated(detail) ? "not-authenticated" : "target-error";
+			const code = failureCode(detail);
 			const status = pickString(object.status) ?? "unknown";
 			return { ...failure(code, `Antigravity failed. Exit code ${result.code}, status ${status}. ${tailText(detail)}`), ...common };
 		}

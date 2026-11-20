@@ -110,3 +110,46 @@ const UNAUTHENTICATED =
 export function looksUnauthenticated(text) {
 	return UNAUTHENTICATED.test(String(text ?? ""));
 }
+
+// Usage and rate limits. A real Codex run printed "You've hit your usage limit.
+// Visit .../settings/usage to purchase more credits or try again at 12:10 PM."
+// The other phrases are the common wording of the other services.
+const USAGE_LIMIT =
+	/usage\s+limit|rate[\s-]?limit|quota\s+(?:exceeded|exhausted|reached)|exceeded\s+your\s+(?:\w+\s+)?quota|too\s+many\s+requests|\b429\b|hit\s+your\s+(?:\w+\s+)?limit|limit\s+reached/i;
+
+/**
+ * True when the text of a FAILED run reports a usage or rate limit.
+ * Never call it on the answer of a successful run.
+ */
+export function looksUsageLimited(text) {
+	return USAGE_LIMIT.test(String(text ?? ""));
+}
+
+/**
+ * The `error.code` for a failed run, from its text. A limit is checked before
+ * a sign-in problem: the wording is more specific, and the caller must not
+ * dispatch again to that target (SKILL.md).
+ */
+export function failureCode(text) {
+	if (looksUsageLimited(text)) return "usage-limit";
+	return looksUnauthenticated(text) ? "not-authenticated" : "target-error";
+}
+
+/**
+ * Text for the `denied_actions` of a target: "command: Bash".
+ * `agy` prints an array of `{ action, display_name }`. Anything else gives [].
+ */
+export function deniedActions(list) {
+	if (!Array.isArray(list)) return [];
+	const texts = [];
+	for (const item of list) {
+		if (typeof item === "string" && item.trim()) texts.push(redact(item.trim()));
+		else if (item && typeof item === "object") {
+			const action = pickString(item.action);
+			const name = pickString(item.display_name, item.displayName, item.name);
+			if (action && name) texts.push(redact(`${action}: ${name}`));
+			else if (action || name) texts.push(redact(action ?? name));
+		}
+	}
+	return texts;
+}
