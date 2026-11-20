@@ -2,6 +2,11 @@
 
 Back to the [README](README.md).
 
+## Documentation update (2026-11-21, tag `v0.2.3-docs.1`)
+
+- The operator approved the install of version 0.2.3. The four skill folders now hold version 0.2.3, identical to the repository.
+- `docs/STATUS.md` records the install. The skill and its version are unchanged from 0.2.3.
+
 ## 0.2.3 (2026-11-21)
 
 - Installer: four skill folders for seven harnesses. The folders are `.claude/skills`, `.codex/skills`, `.gemini/config/skills` and the shared folder `.agents/skills`. ZCode, OpenCode, Cline and DeepSeek Harness read the shared folder. The ids `zcode`, `opencode`, `cline` and the new id `deepseek` select it. A run with more than one of these ids gives one step. The plan names the harnesses that read each folder.

@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-21, after the installer change and the release 0.2.3 (stage H6), by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-21, after the install of version 0.2.3, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -13,7 +13,7 @@ Start with the [README](../README.md). The specification is [design/harness-disp
 ## Current state
 
 - **Release:** `0.2.3` on `main`, tag `v0.2.3`. Later tags with `-docs` in the name change documents only.
-- **Skill:** built, reviewed, verified by live runs on all three targets, documented, and installed on the operator's machine. All seven harnesses load it. The installed copies are version 0.2.2.
+- **Skill:** built, reviewed, verified by live runs on all three targets, documented, and installed on the operator's machine. All seven harnesses load it. The installed copies are version 0.2.3.
 - **Work in progress:** none.
 - **Tests:** 198 tests, 190 pass, 0 fail, 8 skipped (the opt-in live tests of the legacy tool). The bundles are current.
 
@@ -23,10 +23,10 @@ Four skill folders serve seven harnesses. Each copy has `SKILL.md` and `scripts/
 
 | Skill folder | Copy | Harnesses that read it | Does each harness load the skill? |
 |---|---|---|---|
-| `~/.claude/skills/harness-dispatch` | Version 0.2.2 | Claude Code. OpenCode reads it too. | Yes. Claude Code desktop lists the skill and used it for the test dispatches. |
-| `~/.codex/skills/harness-dispatch` | Version 0.2.2 | Codex | Yes. A headless `codex exec` run read the skill and followed it. |
-| `~/.gemini/config/skills/harness-dispatch` | Version 0.2.2 | Antigravity | Yes. On 2026-11-21 an `agy` session listed its skills, and the list names `harness-dispatch`. Antigravity does not read the shared folder. |
-| `~/.agents/skills/harness-dispatch` (the shared folder) | Version 0.2.2 | ZCode, OpenCode, Cline, DeepSeek Harness | Yes, for each of the four. ZCode: its command-line program (version 0.17.1) lists the skill one time. OpenCode: the log of the desktop app (version 1.19.5) names the skill. Cline: a headless session (CLI 3.0.65) listed 51 skills, and `harness-dispatch` is one of them. DeepSeek Harness: the slash menu of the desktop app lists the skill under "Skills". |
+| `~/.claude/skills/harness-dispatch` | Version 0.2.3 | Claude Code. OpenCode reads it too. | Yes. Claude Code desktop lists the skill and used it for the test dispatches. |
+| `~/.codex/skills/harness-dispatch` | Version 0.2.3 | Codex | Yes. A headless `codex exec` run read the skill and followed it. |
+| `~/.gemini/config/skills/harness-dispatch` | Version 0.2.3 | Antigravity | Yes. On 2026-11-21 an `agy` session listed its skills, and the list names `harness-dispatch`. Antigravity does not read the shared folder. |
+| `~/.agents/skills/harness-dispatch` (the shared folder) | Version 0.2.3 | ZCode, OpenCode, Cline, DeepSeek Harness | Yes, for each of the four. ZCode: its command-line program (version 0.17.1) lists the skill one time. OpenCode: the log of the desktop app (version 1.19.5) names the skill. Cline: a headless session (CLI 3.0.65) listed 51 skills, and `harness-dispatch` is one of them. DeepSeek Harness: the slash menu of the desktop app lists the skill under "Skills". |
 
 Each "Yes" comes from output of the harness itself. The sources and the check commands are in [handoffs/2026-11-20-h5-skill-loading-check.md](handoffs/2026-11-20-h5-skill-loading-check.md).
 
@@ -34,8 +34,9 @@ History of the installs:
 
 - 2026-11-20: the operator approved the first install. The command was `node scripts/install-skill.mjs --apply`. It wrote six folders. The install was repeated for version 0.2.2 on the same day.
 - 2026-11-21: the operator decided to remove the own copies of ZCode and OpenCode, because these harnesses also read the shared folder and found the skill two times. The command was `node scripts/install-skill.mjs --uninstall --target zcode --target opencode --apply`, with the installer of version 0.2.2. Four folders remain.
+- 2026-11-21: the operator approved the install of version 0.2.3. The command was `node scripts/install-skill.mjs --apply`. It replaced the copy in each of the four folders.
 
-**The installed copies are version 0.2.2. The repository is version 0.2.3.** The difference in the skill is one sentence in `SKILL.md` (the list of skill folders) and the version number. The script behaves the same. A new install needs the operator's approval.
+The four installed copies are version 0.2.3 and are identical to the repository (checked with `cmp` on `SKILL.md` and `scripts/hd.mjs`, 2026-11-21). The proofs in the table are from version 0.2.2. Version 0.2.3 changes one sentence of `SKILL.md` and the version number, and the script behaves the same. After the install, ZCode still lists the skill one time, and `hd list` runs from the shared folder.
 
 OpenCode reads the shared folder and the Claude Code folder. It thus finds the skill two times, writes one warning about the duplicate name, and uses one copy. The copies are identical.
 
@@ -90,7 +91,6 @@ None of this work is approved.
 | Item | Needs |
 |---|---|
 | Allow rules for `node` in Antigravity and in the Claude Code CLI | The operator: it changes permission settings |
-| An install of version 0.2.3 in the four skill folders | The operator approves the installer run |
 | The Codex built-in web tool in read mode | A flag that removes it, and a live test |
 | POSIX defects D6 and D7 | A POSIX machine for the test run |
 | The dispatch targets ZCode, OpenCode and Cline | An adapter for each. Cline and ZCode have a headless command. OpenCode has only the desktop app on this machine. |
@@ -128,8 +128,8 @@ API list price, `session-dispatch` price table `2026-11-20`, measured with `sess
 | H4 documentation and tidy | `claude-sonnet-5-5` | 49 | 1.66 |
 | H5 skill loading check (sub-agent) | `claude-sonnet-5-5` | 61 | 1.18 |
 | H6 installer and documents (sub-agent) | `claude-sonnet-5-5` | 39 | 1.03 |
-| Hub, to this update | `claude-fable-5-2` | 233 | 54.78 |
+| Hub, to this update | `claude-fable-5-2` | 242 | 56.00 |
 
-Total: 74.21 USD. The hub is 74 percent. Desktop control used 32 hub calls and about 5.8 USD. The wait for the operator's approval of the live checks was longer than the cache lifetime of 1 hour, so the hub wrote its whole context to the cache again one time (about 3 USD). Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
+Total: 75.43 USD. The hub is 74 percent. Desktop control used 32 hub calls and about 5.8 USD. The wait for the operator's approval of the live checks was longer than the cache lifetime of 1 hour, so the hub wrote its whole context to the cache again one time (about 3 USD). Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
 
 The dispatched test tasks used the quota of the target plans. Claude Code reported 0.0065 USD for its test task.
