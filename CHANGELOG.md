@@ -2,6 +2,11 @@
 
 Back to the [README](README.md).
 
+## 0.2.1 (2026-11-20)
+
+- No change in behaviour. The version number changes so that the installed copies and the tag agree.
+- The skill was installed for the first time on the operator's machine, in six harness folders. `docs/STATUS.md` records the install.
+
 ## 0.2.0 (2026-11-20)
 
 The repository is now the skill `harness-dispatch`.

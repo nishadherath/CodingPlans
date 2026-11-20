@@ -82,7 +82,7 @@ When the operator must decide, give: the decision, the options, the advantages a
 
 ## 8. Project facts: CodingPlans
 
-- Purpose since 2026-11-20: the skill `harness-dispatch` (version 0.2.0, package `harness-dispatch`, `private`). An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
+- Purpose since 2026-11-20: the skill `harness-dispatch` (version 0.2.1, package `harness-dispatch`, `private`). An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
 - Start with `README.md`. The user documents are in `docs/` (index: `docs/README.md`). Release notes: `CHANGELOG.md`.
 - Specification: `docs/design/harness-dispatch-contract.md`. Read it before you change code.
 - Skill: `skill/harness-dispatch/SKILL.md` (hand-written) and `skill/harness-dispatch/scripts/hd.mjs` (generated bundle). Sources: `src/dispatch/`. Installer: `scripts/install-skill.mjs`.

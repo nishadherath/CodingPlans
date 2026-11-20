@@ -201,7 +201,7 @@ __ns_src_dispatch_envelope_mjs = (() => {
 const { redact } = __ns_src_dispatch_parse_mjs;
 
 const SCHEMA = "harness-dispatch/1";
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 /** Process exit code for each `error.code`. */
 const EXIT_CODES = {
