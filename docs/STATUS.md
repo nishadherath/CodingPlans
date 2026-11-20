@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20 13:50, H3 complete, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20, release 0.2.0, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,29 +12,41 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-H3 (live verification and corrections) is complete. The skill is built, accepted by H2 with listed defects, and verified by live runs on all three targets. Branch: `feat/harness-dispatch`. Nothing is pushed. **The skill is not installed.** The install waits for the operator.
+Release `0.2.0` is on `main` with the tag `v0.2.0`. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, and documented. **The skill is not installed.** The install waits for the operator: `docs/install.md`.
 
-Evidence: `docs/handoffs/2026-11-20-h3-live-verification.md`. Reviews: `docs/handoffs/2026-11-20-h2-result.md`, `docs/handoffs/2026-11-20-h2-result-part2.md`.
+Start here: `README.md`. User documents: `docs/install.md`, `docs/usage.md`, `docs/safety.md`, `docs/troubleshooting.md`, `docs/development.md`. Evidence: `docs/handoffs/2026-11-20-h3-live-verification.md`. Reviews: `docs/handoffs/2026-11-20-h2-result.md`, `docs/handoffs/2026-11-20-h2-result-part2.md`.
 
-Proved by live runs through `hd` on real targets (2026-11-20):
+Proved by live runs through `hd` on real targets (2026-11-20, Windows 11):
 
 - Dispatch, `--resume`, `--schema` and `--access write` on Claude Code, Codex and Antigravity.
-- Read access on each target: a forced write wrote no file, and a read question was answered. D9 (Claude Code) is corrected. The Codex and Antigravity read modes had the same class of defect and are corrected.
-- Codex read runs have no computer-use tool, no connected app and no MCP server (part 3, confirmed by a live run through `hd`).
+- Read access on each target: a forced write wrote no file, and a read question was answered.
+- Codex read runs have no computer-use tool, no connected app and no MCP server.
 - Callers: Claude Code desktop, Claude Code CLI and Antigravity ran `hd.mjs`. The CLI and Antigravity need an allow rule for `node`.
 
-Known limits (all stated in `SKILL.md` or in the result files):
+Known limits (stated in `docs/safety.md`):
 
 - Codex read runs keep the built-in web tool.
 - Antigravity read runs: MCP and browser tools were not tested.
 - Codex as the caller failed: its Windows sandbox refused to start `node.exe`.
-- ZCode, OpenCode and Cline as the caller: not testable, no headless entry found.
+- ZCode, OpenCode and Cline as the caller: not tested.
 - D6 and D7 (POSIX only): open.
-- The part 3 code was reviewed by the hub, not by the H2 session.
+- The part 3 code (Codex read hardening) was reviewed by the hub, not by the H2 session.
+- The documents of H4 were checked by the hub against the proved state. No separate acceptance session read them.
 
-Tests at `f46e10f`: 192 tests, 184 pass, 0 fail, 8 skipped. Bundles are current.
+Tests at the release: 195 tests, 187 pass, 0 fail, 8 skipped. Bundles are current.
 
-Measured cost (API list price, table `2026-11-20`, `session-cost.mjs`): H1 session 8.57 USD (160 calls), H2 session 6.99 USD (83 calls), hub 27.17 USD (114 calls). Total 42.73 USD.
+Measured cost of the whole project (API list price, table `2026-11-20`, `session-cost.mjs`):
+
+| Session | Model | Calls | USD |
+|---|---|---|---|
+| H1 build and corrections | `claude-sonnet-5-5` | 160 | 8.57 |
+| H2 acceptance and review | `claude-opus-5-5` | 83 | 6.99 |
+| H4 documentation and tidy | `claude-sonnet-5-5` | 49 | 1.66 |
+| Hub, to the release | `claude-fable-5-2` | 126 | 30.06 |
+
+Total: 47.28 USD. The hub is 64 percent.
+
+Next work, none approved: the install (operator); the Codex web tool in read mode; Codex as the caller; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
 
 ## Completed
 
