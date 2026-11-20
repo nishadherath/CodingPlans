@@ -123,6 +123,28 @@ Session dispatch not run: under 10 turns remain (estimate 8), no other trigger.
 
 Level after the live checks: A for ZCode, Antigravity and Cline. B for OpenCode and DeepSeek Harness.
 
+### Desktop control (hub, 2026-11-21, approved by the operator)
+
+Session dispatch: continued in the hub. Desktop control with approved model calls is an outward step, and the hub must see the proof.
+
+| Harness | Check | Result |
+|---|---|---|
+| OpenCode | The log `~/.local/share/opencode/log/opencode.log` after the app start | **Observed.** The log has lines `message="duplicate skill name" name=harness-dispatch`. They show that the app found the skill in `~/.claude/skills`, `~/.agents/skills` and `~/.config/opencode/skill`. The lines exist for two runs: 16:37 UTC (the first start) and 17:02 UTC. |
+| DeepSeek Harness | A new session in the desktop app, then `/harness` in the prompt field. Nothing was sent. | **Observed.** The slash menu shows the group "Skills" with the entry `harness-dispatch` and the start of its description. No model call. |
+
+Level now: A for all five harnesses.
+
+Correction of the table above: the first OpenCode start did write the skill lines. The hub read the log too early. Windows showed the old size and time of the log file while the app had the file open.
+
+Incident, for the record:
+
+- The hub used the `type` action of the desktop control tool to enter the question in a new OpenCode session. The tool pasted through the clipboard, and a different text went into the field. The hub sent it without a look at the field.
+- The text went to the model `Claude Haiku 5.5` in a different OpenCode project of the operator. The hub stopped the response after about 75 seconds.
+- Checked result: the session holds one user message and an empty answer, with no tool call. The project has a clean `git status`, and no file changed. The stopped session stays in OpenCode.
+- Rule from this: with desktop control, enter text with single key presses, or read the field before you send. The DeepSeek Harness check used single key presses and sent nothing.
+
+Other side effects: OpenCode downloaded its update 1.19.6 (the installed version is still 1.19.5). DeepSeek Harness has one empty new session. The hub closed both apps and stopped the DeepSeek Harness background processes that it started.
+
 Measured cost of the sub-agent: 61 calls, 1.18 USD (`session-cost.mjs`, table `2026-11-20`). The projection was 30 calls and 1.70 USD or less.
 
 ## Session dispatch decision

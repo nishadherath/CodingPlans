@@ -78,7 +78,7 @@ A check of the program code on 2026-11-20 gave these results. No model was calle
 - ZCode and OpenCode read their own folder and `.agents/skills`. With the targets `zcode`, `opencode` and `agents` installed, each of them finds the skill two times. ZCode lists the skill two times. OpenCode writes a warning and uses one copy. The copies are identical, so this does no harm.
 - Antigravity reads `.gemini/config/skills`.
 
-ZCode, Antigravity and Cline were seen to list the skill. For OpenCode and DeepSeek Harness, no output of the harness names the skill yet. The record is in [STATUS.md](STATUS.md).
+All five harnesses were seen to find the skill on 2026-11-21: ZCode, Antigravity, Cline, OpenCode and DeepSeek Harness. The record is in [STATUS.md](STATUS.md).
 
 ## Let the caller run `node`
 
