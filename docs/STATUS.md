@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20, after H2, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20 12:45, during the H2 review of H3, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,15 +12,22 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-H3 (live verification and corrections) is in progress. Plan, evidence and proof status: `docs/handoffs/2026-11-20-h3-live-verification.md`. The operator's instruction of 2026-11-20: do not install; correct D9; prove the four open items.
+H3 (live verification and corrections) is implemented and passes the hub oracle. The H2 session reviews the diff now. Evidence and proof status: `docs/handoffs/2026-11-20-h3-live-verification.md`. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
 
-- Antigravity: dispatch, `--resume`, `--schema`, `--access write` and Antigravity as the caller are proved by live runs. Read access with `--mode plan` alone is **not** enforced; with `--sandbox` it is.
-- Codex: blocked until 12:10 PM (usage limit of the account). The CLI on `PATH` (0.154.0) is too old for the account's models; the Codex Desktop binary (0.167.0) is accepted.
-- Claude Code: blocked until the operator runs `claude auth login`.
-- The H1 session implements "Required changes, part 1" now.
-- Open question: `live.stdout` in the repository root held the envelope of a successful Antigravity run at 10:57 (session `(id removed)`). The hub did not start that run. The file is removed in `3c283b6`.
+Proved by live runs on 2026-11-20, through `hd` on real targets:
 
-H1 (build) and H2 (acceptance) are complete. Verdict of H2: **accept with listed defects**. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
+- Dispatch, `--resume`, `--schema` and `--access write` on Claude Code, Codex and Antigravity.
+- Read access: a forced write wrote no file on each target, and a read question was answered on each. The first mappings were not enforced on any target; all three were corrected (D9 is the Claude case).
+- Callers: Claude Code desktop, Claude Code CLI and Antigravity ran `hd.mjs`. The CLI and Antigravity need an allow rule for `node`.
+
+Not resolved:
+
+- Codex read access does not cover its computer-use tool and connected apps. Operator decision pending: document the limit, test a Codex profile, or require an explicit flag.
+- Codex as the caller failed: its Windows sandbox refused to start `node.exe`.
+- ZCode, OpenCode and Cline as the caller: not testable, no headless entry found.
+- D6 and D7 (POSIX only), from the first H2 result.
+
+Tests at `1524e49`: 178 tests, 170 pass, 0 fail, 8 skipped. Bundles are current.
 
 ## Completed
 
