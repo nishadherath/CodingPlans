@@ -112,6 +112,8 @@ Proof state on 2026-11-20. All live runs were on Windows 11.
 | Caller | Codex (Desktop and CLI) | Works when a person approves the launcher. Codex asks for approval of the exact `node .../scripts/hd.mjs` command, because that command must run outside the Codex sandbox. The operator tested this by hand on 2026-11-20. A headless `codex exec` run has nobody to approve: there, `hd list` and `hd doctor` run, and Codex refuses `hd run`. |
 | Caller | ZCode, OpenCode, Cline | Not tested. The installer has folders for ZCode and OpenCode. It has none for Cline. |
 
+On 2026-11-20 the skill was installed in six harness folders on the operator's machine. Each of the three targets then answered a test dispatch through an installed copy. The record is in [docs/STATUS.md](docs/STATUS.md).
+
 ## Known limits
 
 - Codex read runs keep the built-in web tool.
@@ -133,6 +135,7 @@ The details are in [docs/safety.md](docs/safety.md).
 | [docs/development.md](docs/development.md) | Layout, tests, bundles, how to add a target. |
 | [docs/legacy-cline-providers.md](docs/legacy-cline-providers.md) | The older Cline provider repair tool. |
 | [docs/README.md](docs/README.md) | Index of all documents, and the project records. |
+| [docs/STATUS.md](docs/STATUS.md) | The present state: release, install record, proof state, open work, cost. |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes. |
 | [skill/harness-dispatch/SKILL.md](skill/harness-dispatch/SKILL.md) | The instructions that the calling agent reads. |
 | [docs/design/harness-dispatch-contract.md](docs/design/harness-dispatch-contract.md) | The specification. |

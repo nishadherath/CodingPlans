@@ -1,109 +1,121 @@
 # Live status
 
-Last update: 2026-11-20, release 0.2.2 (Codex as the caller), by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20, after the test dispatches through the installed skill, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
 ## Goal
 
-The operator changed the goal on 2026-11-20. This repository becomes the skill `harness-dispatch`: an agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity) and gets one JSON result. Specification: `docs/design/harness-dispatch-contract.md`.
+This repository holds the skill `harness-dispatch`. An agent in one coding harness runs one script and sends a task to a different coding agent CLI (Claude Code, OpenAI Codex, Google Antigravity). The script returns one JSON result. The operator set this goal on 2026-11-20.
 
-The skill must **not** be installed until the operator says so.
+Start with the [README](../README.md). The specification is [design/harness-dispatch-contract.md](design/harness-dispatch-contract.md).
 
 ## Current state
 
-Release `0.2.2` is on `main` with the tag `v0.2.2`. The script has the same behaviour as in `0.2.0`. Version `0.2.2` adds the operator's rule for Codex as the caller to `SKILL.md`. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, documented, and **installed on the operator's machine**.
+- **Release:** `0.2.2` on `main`, tag `v0.2.2`. Later tags with `-docs` in the name change documents only.
+- **Skill:** built, reviewed, verified by live runs on all three targets, documented, and installed on the operator's machine.
+- **Work in progress:** none.
+- **Tests:** 195 tests, 187 pass, 0 fail, 8 skipped (the opt-in live tests of the legacy tool). The bundles are current.
 
-Install record (2026-11-20, on the operator's instruction, `node scripts/install-skill.mjs --apply`; installed again at version 0.2.2 the same day):
+## Install record
 
-| Harness | Skill folder | Check |
-|---|---|---|
-| Claude Code | `~/.claude/skills/harness-dispatch` | Files identical to the repository, `hd --version` gives 0.2.2 |
-| Codex | `~/.codex/skills/harness-dispatch` | Same |
-| Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same |
-| OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same |
-| ZCode | `~/.zcode/skills/harness-dispatch` | Same |
-| Shared agents folder | `~/.agents/skills/harness-dispatch` | Same |
-| Cline | none | Not installed: no skill folder is known |
+The operator approved the install on 2026-11-20. The command was `node scripts/install-skill.mjs --apply`. The install was repeated for version 0.2.2 on the same day.
 
-Checked after the install, with no model call: `hd list` and `hd doctor` run from an installed copy and find the three targets. Not checked: that each harness loads the skill in a new session. Not done: no allow rule for `node` was added to any harness. Antigravity and the Claude Code CLI need that rule before they can run the script as a caller (`docs/install.md`).
+| Harness | Skill folder | Files | Does the harness load the skill? |
+|---|---|---|---|
+| Claude Code | `~/.claude/skills/harness-dispatch` | Identical to the repository, version 0.2.2 | Yes. Claude Code desktop lists the skill and used it for the test dispatches. |
+| Codex | `~/.codex/skills/harness-dispatch` | Same | Yes. A headless `codex exec` run read the skill and followed it. |
+| Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same | Not checked |
+| OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same | Not checked |
+| ZCode | `~/.zcode/skills/harness-dispatch` | Same | Not checked |
+| Shared agents folder | `~/.agents/skills/harness-dispatch` | Same | Not checked |
+| Cline | none | Not installed: no skill folder is known | Not applicable |
 
 The installed copies do not follow the repository. Run the installer again after each change to `skill/harness-dispatch/`.
 
-Session dispatch for the install stage: not handed off. About 7 turns remained and the stage has outward steps (writes in the home folder, push), so the hub did the work (guardrails 1 and 3).
+No allow rule for `node` was added to any harness. Antigravity and the Claude Code CLI need that rule before they can run the script as a caller. See [install.md](install.md).
 
-Start here: `README.md`. User documents: `docs/install.md`, `docs/usage.md`, `docs/safety.md`, `docs/troubleshooting.md`, `docs/development.md`. Evidence: `docs/handoffs/2026-11-20-h3-live-verification.md`. Reviews: `docs/handoffs/2026-11-20-h2-result.md`, `docs/handoffs/2026-11-20-h2-result-part2.md`.
+## Proof state
 
-Proved by live runs through `hd` on real targets (2026-11-20, Windows 11):
+All live runs were on Windows 11 on 2026-11-20. The evidence is in [handoffs/2026-11-20-h3-live-verification.md](handoffs/2026-11-20-h3-live-verification.md).
 
-- Dispatch, `--resume`, `--schema` and `--access write` on Claude Code, Codex and Antigravity.
-- Read access on each target: a forced write wrote no file, and a read question was answered.
-- Codex read runs have no computer-use tool, no connected app and no MCP server.
-- Callers: Claude Code desktop, Claude Code CLI and Antigravity ran `hd.mjs`. The CLI and Antigravity need an allow rule for `node`.
+| Item | Claude Code | Codex | Antigravity |
+|---|---|---|---|
+| Dispatch through `hd run` | Proved | Proved | Proved |
+| `--resume` | Proved | Proved | Proved |
+| `--schema` | Proved | Mechanism proved. The low-cost test model gave a wrong answer text. | Proved |
+| `--access write` | Proved | Proved | Proved |
+| Read access is enforced (a forced write wrote no file) | Proved | Proved for files and shell. Plugins, connected apps, computer-use and MCP servers are off. | Proved |
+| Test dispatch through an **installed** copy of the skill | Proved (version 0.2.2, `claude-haiku-5-5`) | Proved (version 0.2.1, `gpt-5.6-luna`) | Proved (version 0.2.1, default model) |
 
-Known limits (stated in `docs/safety.md`):
+In each test dispatch through an installed copy, the target read two files and gave the exact three lines that the repository holds. No file changed.
+
+Callers:
+
+| Caller | State |
+|---|---|
+| Claude Code desktop | Proved. All hub dispatches came from it. |
+| Claude Code CLI | Proved. It needs an allow rule for `node`. |
+| Antigravity | Proved. It needs the allow rule `command(node)`. |
+| Codex Desktop and CLI | Works when a person approves the launcher command. The operator tested this by hand. |
+| Codex, headless `codex exec` | `hd list` and `hd doctor` run. Codex refused `hd run`, because nobody could approve it (hub test). |
+| ZCode, OpenCode, Cline | Not tested |
+
+## Known limits
+
+The user document for these limits is [safety.md](safety.md).
 
 - Codex read runs keep the built-in web tool.
 - Antigravity read runs: MCP and browser tools were not tested.
-- Codex as the caller works when a person approves the launcher command (tested by hand by the operator, 2026-11-20). In a headless `codex exec` run, Codex refused `hd run` (hub test, 2026-11-20).
-- ZCode, OpenCode and Cline as the caller: not tested.
-- D6 and D7 (POSIX only): open.
-- The part 3 code (Codex read hardening) was reviewed by the hub, not by the H2 session.
-- The documents of H4 were checked by the hub against the proved state. No separate acceptance session read them.
+- Claude Code in write mode refuses each shell command that needs approval.
+- Codex as the caller runs the launcher outside the Codex sandbox, after approval.
+- Only Windows 11 was tested. Two POSIX defects are open: D6 and D7 in [handoffs/2026-11-20-h2-result.md](handoffs/2026-11-20-h2-result.md).
+- The Codex CLI must be recent. Version 0.154.0 was rejected by the service. The skill selects the newest `codex` program that it finds.
+- Review gaps: the hub reviewed the Codex read hardening (part 3) and the user documents. No separate acceptance session read them.
 
-Tests at the release: 195 tests, 187 pass, 0 fail, 8 skipped. Bundles are current.
+## Open work
 
-Measured cost of the whole project (API list price, table `2026-11-20`, `session-cost.mjs`):
+None of this work is approved.
+
+| Item | Needs |
+|---|---|
+| Allow rules for `node` in Antigravity and in the Claude Code CLI | The operator: it changes permission settings |
+| A check that Antigravity, OpenCode and ZCode load the skill | A new session in each harness |
+| The Codex built-in web tool in read mode | A flag that removes it, and a live test |
+| POSIX defects D6 and D7 | A POSIX machine for the test run |
+| The targets ZCode, OpenCode and Cline | A headless entry for each |
+| `stream-json` sessions for Antigravity (long prompts, warm sessions) | Not planned |
+| The older local tag `v0.1` is not on the remote | An operator decision |
+| The legacy Cline provider repair | Deferred. See [analysis/2026-11-20-project-assessment.md](analysis/2026-11-20-project-assessment.md), section 7. |
+
+## Gates that always need the operator
+
+A live dispatch or live test, an installer run with `--apply`, a real `fix` run of the legacy tool, `git push`, a release, and each message to an external party.
+
+## History
+
+| Stage | Result | Record |
+|---|---|---|
+| 0. Assessment | Five defects that stopped the legacy tool, and a staged plan | [analysis/2026-11-20-project-assessment.md](analysis/2026-11-20-project-assessment.md) |
+| 0. Contract | Version 1 specification of the skill | [design/harness-dispatch-contract.md](design/harness-dispatch-contract.md) |
+| H1. Build | Engine, three adapters, CLI, bundle, skill file, installer | [handoffs/2026-11-20-h1-result.md](handoffs/2026-11-20-h1-result.md) |
+| H2. Acceptance | Accepted with listed defects. 13 defects found in two reviews, 11 corrected. D6 and D7 (POSIX) are open. | [handoffs/2026-11-20-h2-result.md](handoffs/2026-11-20-h2-result.md), [handoffs/2026-11-20-h2-result-part2.md](handoffs/2026-11-20-h2-result-part2.md) |
+| H3. Live verification | The first read mappings were not enforced on any target. All three were corrected and proved. | [handoffs/2026-11-20-h3-live-verification.md](handoffs/2026-11-20-h3-live-verification.md) |
+| H4. Documentation and tidy | The user documents, the link test, release `0.2.0` | [handoffs/2026-11-20-h4-docs-and-tidy.md](handoffs/2026-11-20-h4-docs-and-tidy.md) |
+| Install | Six harness folders, release `0.2.1` | This file |
+| Codex as the caller | The operator's rule in `SKILL.md`, release `0.2.2` | [CHANGELOG](../CHANGELOG.md) |
+
+## Measured cost
+
+API list price, `session-dispatch` price table `2026-11-20`, measured with `session-cost.mjs` on each session transcript. The operator uses a subscription plan, so the figures show relative cost and not an invoice.
 
 | Session | Model | Calls | USD |
 |---|---|---|---|
 | H1 build and corrections | `claude-sonnet-5-5` | 160 | 8.57 |
 | H2 acceptance and review | `claude-opus-5-5` | 83 | 6.99 |
 | H4 documentation and tidy | `claude-sonnet-5-5` | 49 | 1.66 |
-| Hub, to the release | `claude-fable-5-2` | 126 | 30.06 |
+| Hub, to this update | `claude-fable-5-2` | 156 | 36.97 |
 
-Total: 47.28 USD. The hub is 64 percent.
+Total: 54.19 USD. The hub is 68 percent. Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
 
-Next work, none approved: the allow rules for callers (operator); a check that each harness loads the skill; the Codex web tool in read mode; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
-
-## Completed
-
-| Stage | Result | Cost (API list price) |
-|---|---|---|
-| 0. Assessment and configuration | `docs/analysis/2026-11-20-project-assessment.md`, `AGENTS.md`, `CLAUDE.md` | In the hub figure |
-| 0. Contract and dispatch decision | `docs/design/harness-dispatch-contract.md`, `docs/handoffs/2026-11-20-h1-harness-dispatch-build.md` | In the hub figure |
-| H1. Build | Engine, three adapters, CLI, bundle `skill/harness-dispatch/scripts/hd.mjs`, skill file, installer, legacy defects D1 and D2. Note: `docs/handoffs/2026-11-20-h1-result.md`. | 4.54 USD measured (78 calls). Projected 14.28. |
-| H2. Acceptance | 9 defects found, 5 corrected by H2, 1 corrected by the hub (D8), 3 open (D6, D7, D9). Result: `docs/handoffs/2026-11-20-h2-result.md`. | 4.70 USD measured (53 calls). Projected 8.00. |
-| Live dispatch | `hd run --to antigravity --access read`: exit code 0, `ok` true, 23,580 tokens, 54 seconds | Plan quota of Antigravity |
-| Hub | Assessment, contract, handoffs, probes, coordination | 13.91 USD measured (52 calls) |
-
-Total measured: 23.15 USD. Tests at the head: 139 tests, 131 pass, 0 fail, 8 skipped. Bundles are current.
-
-## In progress
-
-None.
-
-## Remaining
-
-| Item | Work | Needs |
-|---|---|---|
-| Install | Run `node scripts/install-skill.mjs --apply` (all harness folders that exist) or with `--target <id>` | The operator |
-| D9 | Make the read access of `claude` independent of the allow rules in the settings | An operator decision and one live probe after `claude auth login` |
-| D6, D7 | POSIX: stop the target when the caller stops `hd`; per-user log folder | A POSIX machine for the test run |
-| Real success fixtures | `claude` and `codex` success output is still synthetic in the tests | `claude auth login`; a Codex model that the account accepts |
-| Not verified | `--resume`, `--schema` and `--access write` on a real target | Operator approval for live runs |
-| Later targets | ZCode, OpenCode, Cline. `stream-json` sessions for `agy`. | Not planned yet |
-| Deferred | Cline provider repair: assessment section 7 | Not planned yet |
-| Merge | Merge `feat/harness-dispatch` to `main`, push | The operator |
-
-## Open decisions and gates
-
-| # | Item | State |
-|---|---|---|
-| 1 | Live probe: one one-word prompt to each of `claude`, `codex` and `agy`, to capture real output for test fixtures | Done 2026-11-20. `agy`: success. `claude`: failed, OAuth session expired. `codex`: failed, the account rejects `gpt-6.2-astra` (the configured default) and `gpt-5.5`. Real captures are in `test/fixtures/`. |
-| 1a | The operator runs `claude auth login` in a terminal | Waiting for the operator. Needed before the H2 live dispatch to `claude`. |
-| 1b | The operator names a Codex model that the ChatGPT account accepts | Waiting for the operator. Needed before the H2 live dispatch to `codex`. |
-| 2 | Hub effort: the operator can set this session to `medium` to lower the coordination cost | Optional |
-| 3 | Assessment decisions 1 and 3 (Codex link strategy, npm and upstream) | Deferred with the Cline repair work |
-
-Gates that always need the operator: a live dispatch or live test, an installer run with `--apply`, a real `fix` run, `git push`, a release, and each message to an external party.
+The dispatched test tasks used the quota of the target plans. Claude Code reported 0.0065 USD for its test task.

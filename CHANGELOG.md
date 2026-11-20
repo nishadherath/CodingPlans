@@ -2,6 +2,13 @@
 
 Back to the [README](README.md).
 
+## Documentation update (2026-11-20, tag `v0.2.2-docs.1`)
+
+- `docs/STATUS.md` is written again from the present state: release, install record, proof state, known limits, open work, history and measured cost. The old stage lists are removed.
+- New result: each of the three targets answered a test dispatch through an installed copy of the skill.
+- `README.md` links to the status file. `AGENTS.md` states that the skill is installed.
+- The skill and its version are unchanged from 0.2.2. The installed copies need no update.
+
 ## 0.2.2 (2026-11-20)
 
 - `SKILL.md`: a rule for Codex Desktop and CLI on Windows, written by the operator. Codex uses the absolute path of the launcher and asks for approval of the exact `node .../scripts/hd.mjs` command when its sandbox blocks the launch or the writes of the target.
