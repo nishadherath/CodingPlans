@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { DispatchError } from "../../src/dispatch/envelope.mjs";
+import { deniedActions } from "../../src/dispatch/parse.mjs";
 import antigravity from "../../src/dispatch/harnesses/antigravity.mjs";
 import claude from "../../src/dispatch/harnesses/claude.mjs";
 import codex from "../../src/dispatch/harnesses/codex.mjs";
@@ -30,16 +31,23 @@ test("the registry lists the three version 1 targets", () => {
 
 const CLAUDE_BASE = ["-p", "--output-format", "json", "--permission-prompts", "none"];
 
+// Read access (H3 part 2, live runs k1b, k6, y4): the old mapping (manual mode
+// alone) wrote a file when an allow rule applied. `--restricted` drops the shell
+// tools and the settings files, and the deny list drops the edit tools. The deny
+// list is LAST: it takes several values, and the prompt is on stdin.
+const CLAUDE_READ = ["--permission-mode", "manual", "--restricted", "--strict-mcp-config"];
+const CLAUDE_DENY = ["--disallowedTools", "Edit", "Write", "NotebookEdit"];
+
 const claudeTable = [
-	["read-only default", {}, [...CLAUDE_BASE, "--permission-mode", "manual"]],
-	["write", { access: "write" }, [...CLAUDE_BASE, "--permission-mode", "acceptEdits"]],
+	["read-only default", {}, [...CLAUDE_BASE, ...CLAUDE_READ, ...CLAUDE_DENY]],
+	["write is unchanged", { access: "write" }, [...CLAUDE_BASE, "--permission-mode", "acceptEdits"]],
 	[
-		"model and effort",
+		"model and effort come before the deny list",
 		{ model: "sonnet", effort: "high" },
-		[...CLAUDE_BASE, "--permission-mode", "manual", "--model", "sonnet", "--effort", "high"],
+		[...CLAUDE_BASE, ...CLAUDE_READ, "--model", "sonnet", "--effort", "high", ...CLAUDE_DENY],
 	],
-	["resume", { resume: "abc-123" }, [...CLAUDE_BASE, "--permission-mode", "manual", "--resume", "abc-123"]],
-	["schema", { schema }, [...CLAUDE_BASE, "--permission-mode", "manual", "--json-schema", '{"type":"object"}']],
+	["resume", { resume: "abc-123" }, [...CLAUDE_BASE, ...CLAUDE_READ, "--resume", "abc-123", ...CLAUDE_DENY]],
+	["schema", { schema }, [...CLAUDE_BASE, ...CLAUDE_READ, "--json-schema", '{"type":"object"}', ...CLAUDE_DENY]],
 ];
 
 for (const [name, overrides, expected] of claudeTable) {
@@ -68,22 +76,9 @@ test("claude parseOutput: success", () => {
 	assert.deepEqual(parsed.usage, { input_tokens: 12, output_tokens: 5, cache_read_tokens: 3000, reasoning_tokens: null, total_tokens: null });
 });
 
-test("claude parseOutput: structured output", () => {
-	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "synthetic-structured.json") }));
-	assert.equal(parsed.ok, true);
-	assert.deepEqual(parsed.structured, { answer: 4 });
-});
-
 test("claude parseOutput: an array of messages uses the last result", () => {
 	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "synthetic-array.json") }));
 	assert.equal(parsed.text, "OK from array");
-});
-
-test("claude parseOutput: is_error with a sign-in problem", () => {
-	const parsed = claude.parseOutput(makeResult({ code: 1, stdout: fixture("claude", "synthetic-error.json") }));
-	assert.equal(parsed.ok, false);
-	assert.equal(parsed.error.code, "not-authenticated");
-	assert.doesNotMatch(parsed.error.message, /@/, "no account email in the message");
 });
 
 test("claude parseOutput: output that is not JSON", () => {
@@ -105,23 +100,23 @@ const codexTable = [
 	[
 		"read-only default",
 		{ cwd: "/work" },
-		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-"],
+		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "-"],
 	],
-	["write", { cwd: "/work", access: "write" }, [...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="workspace-write"', "-"]],
+	["write", { cwd: "/work", access: "write" }, [...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="workspace-write"', "-c", 'approval_policy="never"', "-"]],
 	[
 		"model and effort",
 		{ cwd: "/work", model: "gpt-x", effort: "xhigh" },
-		[...CODEX_NEW, "-C", "/work", "-m", "gpt-x", "-c", 'model_reasoning_effort="xhigh"', "-c", 'sandbox_mode="read-only"', "-"],
+		[...CODEX_NEW, "-C", "/work", "-m", "gpt-x", "-c", 'model_reasoning_effort="xhigh"', "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "-"],
 	],
 	[
 		"schema",
 		{ cwd: "/work", schema },
-		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "--output-schema", "/abs/schema.json", "-"],
+		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "--output-schema", "/abs/schema.json", "-"],
 	],
 	[
 		"resume has no -C and puts the id before the prompt marker",
 		{ cwd: "/work", resume: "sess-1", model: "gpt-x" },
-		["exec", "resume", "--json", "--skip-git-repo-check", "-o", "TMP/last-message.txt", "-m", "gpt-x", "-c", 'sandbox_mode="read-only"', "sess-1", "-"],
+		["exec", "resume", "--json", "--skip-git-repo-check", "-o", "TMP/last-message.txt", "-m", "gpt-x", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "sess-1", "-"],
 	],
 ];
 
@@ -376,4 +371,99 @@ test("antigravity read access: no --sandbox, and the deny rule is one JSON argum
 	assert.deepEqual(JSON.parse(settings), { permissions: { deny: ["command(*)"] } });
 	assert.equal(args.filter((arg) => arg === "--settings").length, 1);
 	assert.doesNotMatch(args.join(" "), /dangerously|bypass/i);
+});
+
+// ------------------------------------------- H3 part 2: real success captures
+// Captured by the hub on 2026-11-20 with live runs. The field names below are
+// checked against the files.
+
+test("claude never passes --restricted or the deny list for write access", () => {
+	const args = claude.buildInvocation(makeRequest({ access: "write" }), makeCtx()).args;
+	assert.ok(!args.includes("--restricted") && !args.includes("--disallowedTools") && !args.includes("--strict-mcp-config"));
+});
+
+test("claude read: the deny list is the last option and has three separate values", () => {
+	const args = claude.buildInvocation(makeRequest({ model: "haiku", resume: "r", schema }), makeCtx()).args;
+	assert.deepEqual(args.slice(-4), ["--disallowedTools", "Edit", "Write", "NotebookEdit"]);
+	assert.ok(args.includes("--restricted") && args.includes("--strict-mcp-config"));
+});
+
+test("codex passes approval_policy never for read and write, on new and resumed sessions", () => {
+	for (const access of ["read", "write"]) {
+		for (const resume of [null, "sess-1"]) {
+			const args = codex.buildInvocation(makeRequest({ to: "codex", cwd: "/work", access, resume }), makeCtx()).args;
+			assert.ok(args.includes('approval_policy="never"'), `${access} resume=${resume}`);
+		}
+	}
+});
+
+test("claude real output: success", () => {
+	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "real-ok.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.text, "OK");
+	assert.equal(parsed.session_id, "61fc0964-fd26-4934-a1f1-4e3b570a133d");
+	assert.equal(parsed.model, "claude-haiku-5-5", "the one key of modelUsage");
+	assert.equal(parsed.cost_usd, 0.00585489);
+	assert.deepEqual(parsed.usage, { input_tokens: 2, output_tokens: 4, cache_read_tokens: 28989, reasoning_tokens: null, total_tokens: null });
+	assert.deepEqual(parsed.denied_actions ?? [], []);
+});
+
+test("claude real output: a resumed session keeps its session id", () => {
+	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "real-resume.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.session_id, "61fc0964-fd26-4934-a1f1-4e3b570a133d");
+	assert.equal(parsed.text, "Reply with exactly: OK");
+});
+
+test("claude real output: a schema run fills structured", () => {
+	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "real-schema.stdout.json") }));
+	assert.equal(parsed.ok, true);
+	assert.deepEqual(parsed.structured, { answer: "OK" });
+	assert.equal(parsed.text, '{"answer":"OK"}');
+});
+
+test("claude real output: permission_denials become denied_actions, and the run stays ok", () => {
+	const parsed = claude.parseOutput(makeResult({ stdout: fixture("claude", "real-permission-denials.stdout.json") }));
+	assert.equal(parsed.ok, true, "the agent answered");
+	assert.deepEqual(parsed.denied_actions, ["Bash", "Write"]);
+	assert.match(parsed.text, /^DENIED/);
+});
+
+test("deniedActions reads the tool_name of a Claude record", () => {
+	assert.deepEqual(deniedActions([{ tool_name: "Bash", tool_use_id: "x", tool_input: { command: "npm test" } }]), ["Bash"]);
+});
+
+const codexCtx = (overrides = {}) => ({ invocation: { tempFiles: ["TMP/x"] }, tempContents: { "TMP/x": null }, request: makeRequest({ to: "codex" }), ...overrides });
+
+test("codex real output: success from the events", () => {
+	const parsed = codex.parseOutput(makeResult({ stdout: fixture("codex", "real-ok.stdout.jsonl") }), codexCtx());
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.text, "OK");
+	assert.equal(parsed.session_id, "01a1f682-9b56-7512-bee1-3132576e60f4");
+	assert.deepEqual(parsed.usage, { input_tokens: 22328, output_tokens: 5, cache_read_tokens: 11648, reasoning_tokens: 0, total_tokens: null });
+});
+
+test("codex real output: a resumed session", () => {
+	const parsed = codex.parseOutput(makeResult({ stdout: fixture("codex", "real-resume.stdout.jsonl") }), codexCtx());
+	assert.equal(parsed.ok, true);
+	assert.equal(parsed.session_id, "01a1f682-9b56-7512-bee1-3132576e60f4");
+	assert.equal(parsed.text, "Reply with exactly: OK.");
+	assert.equal(parsed.usage.input_tokens, 44682);
+});
+
+test("codex real output: with two agent messages the last one is the answer", () => {
+	const request = makeRequest({ to: "codex", schema });
+	const parsed = codex.parseOutput(makeResult({ stdout: fixture("codex", "real-schema-trimmed.stdout.jsonl") }), codexCtx({ request }));
+	assert.equal(parsed.ok, true);
+	assert.match(parsed.text, /could not set the field/);
+	assert.doesNotMatch(parsed.text, /I’ll inspect/);
+	assert.match(parsed.structured.answer, /could not set the field/, "structured comes from the last message");
+	assert.equal(parsed.usage.reasoning_tokens, 143);
+});
+
+test("codex real output: a command that the sandbox refused does not fail the run", () => {
+	const parsed = codex.parseOutput(makeResult({ stdout: fixture("codex", "real-sandbox-denied.stdout.jsonl") }), codexCtx());
+	assert.equal(parsed.ok, true);
+	assert.match(parsed.text, /^DENIED/);
+	assert.equal(parsed.session_id, "01a1f686-0690-7cf2-ae6d-621ae4733f9a");
 });

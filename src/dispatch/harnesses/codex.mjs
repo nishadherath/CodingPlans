@@ -15,9 +15,11 @@
 // resolver prefers a real `codex.exe` on PATH, then starts the package entry
 // file with this Node program (the official launcher).
 //
-// Failure events were seen in live runs (H3). Not verified by a live run: the
-// success events and the usage field names. The parser accepts the known
-// variants of the usage names.
+// Success and failure events were confirmed by live runs (H3, fixtures
+// `real-*`): `item.completed` with `agent_message` (the last one is the answer)
+// and `turn.completed` with `usage` (`input_tokens`, `cached_input_tokens`,
+// `output_tokens`, `reasoning_output_tokens`). The parser also accepts other
+// known names of the usage fields.
 
 import { DispatchError } from "../envelope.mjs";
 import { failureCode, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
@@ -58,6 +60,11 @@ const adapter = {
 		if (request.model) args.push("-m", request.model);
 		if (request.effort) args.push("-c", `model_reasoning_effort="${request.effort}"`);
 		args.push("-c", `sandbox_mode="${sandbox}"`);
+		// Live runs (H3, 2026-11-20): with the operator's `approval_policy =
+		// "on-request"`, a read-only run wrote a file. With "never" the same write
+		// was refused. Nobody can answer an approval in headless mode, so "never"
+		// is also right for write access. `-c` exists for `exec resume` too.
+		args.push("-c", `approval_policy="never"`);
 		if (request.schema) args.push("--output-schema", request.schema.path);
 		if (resuming) args.push(request.resume);
 		args.push("-");

@@ -146,7 +146,8 @@ export function deniedActions(list) {
 		if (typeof item === "string" && item.trim()) texts.push(redact(item.trim()));
 		else if (item && typeof item === "object") {
 			const action = pickString(item.action);
-			const name = pickString(item.display_name, item.displayName, item.name);
+			// agy: { action, display_name }. Claude Code: { tool_name, tool_use_id, tool_input }.
+			const name = pickString(item.display_name, item.displayName, item.name, item.tool_name);
 			if (action && name) texts.push(redact(`${action}: ${name}`));
 			else if (action || name) texts.push(redact(action ?? name));
 		}

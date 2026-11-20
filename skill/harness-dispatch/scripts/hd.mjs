@@ -176,7 +176,8 @@ function deniedActions(list) {
 		if (typeof item === "string" && item.trim()) texts.push(redact(item.trim()));
 		else if (item && typeof item === "object") {
 			const action = pickString(item.action);
-			const name = pickString(item.display_name, item.displayName, item.name);
+			// agy: { action, display_name }. Claude Code: { tool_name, tool_use_id, tool_input }.
+			const name = pickString(item.display_name, item.displayName, item.name, item.tool_name);
 			if (action && name) texts.push(redact(`${action}: ${name}`));
 			else if (action || name) texts.push(redact(action ?? name));
 		}
@@ -1463,19 +1464,33 @@ __ns_src_dispatch_harnesses_claude_mjs = (() => {
 //   -p                          print mode: one run, no screen
 //   --output-format json        one JSON object on stdout
 //   --permission-prompts none   nobody answers a prompt: it is denied
-//   --permission-mode           manual (read-only task) | acceptEdits (write)
+//   --permission-mode           manual (read) | acceptEdits (write)
+//   --restricted, --strict-mcp-config, --disallowedTools   read access (below)
 // The prompt goes on stdin, so it has no size limit and no quoting problem.
 //
 // Safety: no bypass flag is ever passed (contract section 8, rule 2).
-// Not verified by a live run: the field names of the JSON object. Fixtures
-// named `synthetic-*` hold the expected shape.
+// The field names of the JSON object were confirmed by live runs (fixtures
+// `real-*`). `synthetic-*` fixtures hold shapes that no live run produced.
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
-const { failureCode, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
+const { deniedActions, failureCode, parseJsonLoose, pickNumber, pickString, tailText } = __ns_src_dispatch_parse_mjs;
 const { EFFORTS } = __ns_src_dispatch_request_mjs;
 const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
-const PERMISSION_MODE = { read: "manual", write: "acceptEdits" };
+// Read access (live runs of 2026-11-20, scratch repository with allow rules for
+// Bash, Edit and Write):
+//  - "--permission-mode manual --permission-prompts none" alone ran `npm test`
+//    and wrote a file (defect D9): an allow rule beats the mode.
+//  - "--restricted" removes the shell tools and ignores the settings files, but
+//    a rule that came by "--settings" still let Write work.
+//  - "--disallowedTools Edit Write NotebookEdit" on top wrote nothing. A deny
+//    rule wins over an allow rule.
+//  - "--strict-mcp-config" keeps MCP servers out (a read question still works).
+// So a read run has the file read and search tools only. The deny list takes
+// several values, so it is the LAST option (the prompt is on stdin).
+const READ_ARGS = ["--permission-mode", "manual", "--restricted", "--strict-mcp-config"];
+const READ_DENY_ARGS = ["--disallowedTools", "Edit", "Write", "NotebookEdit"];
+const WRITE_ARGS = ["--permission-mode", "acceptEdits"];
 
 /** Compact JSON text for `--json-schema`. Falls back to the text as given. */
 function schemaText(schema) {
@@ -1497,13 +1512,16 @@ const adapter = {
 	},
 
 	buildInvocation(request) {
-		const mode = PERMISSION_MODE[request.access];
-		if (!mode) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
-		const args = ["-p", "--output-format", "json", "--permission-prompts", "none", "--permission-mode", mode];
+		if (request.access !== "read" && request.access !== "write") {
+			throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
+		}
+		const reading = request.access === "read";
+		const args = ["-p", "--output-format", "json", "--permission-prompts", "none", ...(reading ? READ_ARGS : WRITE_ARGS)];
 		if (request.model) args.push("--model", request.model);
 		if (request.effort) args.push("--effort", request.effort);
 		if (request.resume) args.push("--resume", request.resume);
 		if (request.schema) args.push("--json-schema", schemaText(request.schema));
+		if (reading) args.push(...READ_DENY_ARGS);
 		return { args, stdin: request.prompt, tempFiles: [] };
 	},
 
@@ -1523,6 +1541,8 @@ const adapter = {
 		const usage = object.usage ?? {};
 		const models = Object.keys(object.modelUsage ?? {});
 		const common = {
+			// Each denied tool call of the run: `{ tool_name, tool_use_id, tool_input }`.
+			denied_actions: deniedActions(object.permission_denials),
 			session_id: pickString(object.session_id),
 			model: models.length === 1 ? models[0] : null,
 			cost_usd: pickNumber(object.total_cost_usd),
@@ -1584,9 +1604,11 @@ __ns_src_dispatch_harnesses_codex_mjs = (() => {
 // resolver prefers a real `codex.exe` on PATH, then starts the package entry
 // file with this Node program (the official launcher).
 //
-// Failure events were seen in live runs (H3). Not verified by a live run: the
-// success events and the usage field names. The parser accepts the known
-// variants of the usage names.
+// Success and failure events were confirmed by live runs (H3, fixtures
+// `real-*`): `item.completed` with `agent_message` (the last one is the answer)
+// and `turn.completed` with `usage` (`input_tokens`, `cached_input_tokens`,
+// `output_tokens`, `reasoning_output_tokens`). The parser also accepts other
+// known names of the usage fields.
 
 const { DispatchError } = __ns_src_dispatch_envelope_mjs;
 const { failureCode, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } = __ns_src_dispatch_parse_mjs;
@@ -1627,6 +1649,11 @@ const adapter = {
 		if (request.model) args.push("-m", request.model);
 		if (request.effort) args.push("-c", `model_reasoning_effort="${request.effort}"`);
 		args.push("-c", `sandbox_mode="${sandbox}"`);
+		// Live runs (H3, 2026-11-20): with the operator's `approval_policy =
+		// "on-request"`, a read-only run wrote a file. With "never" the same write
+		// was refused. Nobody can answer an approval in headless mode, so "never"
+		// is also right for write access. `-c` exists for `exec resume` too.
+		args.push("-c", `approval_policy="never"`);
 		if (request.schema) args.push("--output-schema", request.schema.path);
 		if (resuming) args.push(request.resume);
 		args.push("-");
