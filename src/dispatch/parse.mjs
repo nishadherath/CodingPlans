@@ -114,8 +114,10 @@ export function looksUnauthenticated(text) {
 // Usage and rate limits. A real Codex run printed "You've hit your usage limit.
 // Visit .../settings/usage to purchase more credits or try again at 12:10 PM."
 // The other phrases are the common wording of the other services.
+// "limit reached" needs a plan period before it, and "429" needs an HTTP
+// context: "Context limit reached" or "line 429" is not a usage limit (H2).
 const USAGE_LIMIT =
-	/usage\s+limit|rate[\s-]?limit|quota\s+(?:exceeded|exhausted|reached)|exceeded\s+your\s+(?:\w+\s+)?quota|too\s+many\s+requests|\b429\b|hit\s+your\s+(?:\w+\s+)?limit|limit\s+reached/i;
+	/usage\s+limit|rate[\s-]?limit|quota\s+(?:exceeded|exhausted|reached)|exceeded\s+your\s+(?:\w+\s+)?quota|too\s+many\s+requests|(?:error|status|code|http)[\s:=]*429\b|hit\s+your\s+(?:[\w-]+\s+)?limit|(?:hour|daily|weekly|monthly|session|plan)\s+limit\s+reached/i;
 
 /**
  * True when the text of a FAILED run reports a usage or rate limit.

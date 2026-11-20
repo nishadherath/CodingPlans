@@ -87,6 +87,14 @@ test("usage-limit text is recognised, and it is checked before the sign-in text"
 		assert.equal(failureCode(text), "usage-limit", text);
 	}
 	assert.equal(looksUsageLimited("the build failed"), false);
+	// H2 part 2: other limits and a bare 429 are not a usage limit. A false
+	// usage-limit tells the caller to stop dispatching to a working target.
+	for (const text of ["Context limit reached", "time limit reached", "output token limit reached", "Error: ENOENT at line 429"]) {
+		assert.equal(failureCode(text), "target-error", text);
+	}
+	for (const text of ["5-hour limit reached ∙ resets 3pm", "Weekly limit reached", "API Error: 429", "You've hit your 5-hour limit"]) {
+		assert.equal(failureCode(text), "usage-limit", text);
+	}
 	assert.equal(failureCode("Please run /login"), "not-authenticated");
 	assert.equal(failureCode("segmentation fault"), "target-error");
 });
