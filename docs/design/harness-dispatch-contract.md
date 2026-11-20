@@ -158,13 +158,24 @@ All flags below come from the `--help` text of the installed versions, read on 2
 | Base | `-p --output-format json --permission-prompts none` |
 | Prompt | `stdin` |
 | `--model`, `--effort` | `--model <id>`, `--effort <level>` |
-| `--access read` | `--permission-mode manual` |
+| `--access read` | `--permission-mode manual --restricted --strict-mcp-config`, and `--disallowedTools Edit Write NotebookEdit` as the LAST option (three separate values) |
 | `--access write` | `--permission-mode acceptEdits` |
 | `--resume` | `--resume <session_id>` |
 | `--schema` | `--json-schema <schema text>` |
 | `--cwd` | Process working directory |
 
-Output: one JSON object. Expected fields (not verified by a live run today): `result`, `is_error`, `session_id`, `usage`, `total_cost_usd`.
+Output: one JSON object. Fields confirmed by live runs (2026-11-20): `result`, `is_error`, `session_id`, `total_cost_usd`, `usage` (`input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`), `modelUsage` (one key: the model id), `structured_output` (with `--json-schema`) and `permission_denials` (an array of `{ tool_name, tool_use_id, tool_input }`, empty when none). Each `tool_name` goes to `denied_actions`. A run with an answer and denials stays `ok`.
+
+Read access (correction of defect D9). Live evidence, scratch repository with allow rules for `Bash(*)`, `Edit` and `Write`:
+
+- `--permission-mode manual --permission-prompts none` alone ran `npm test` and wrote a file. An allow rule beats the mode. (Claude Code ignores the allow rules of a workspace that is not trusted, so the defect shows in a trusted workspace or with a user rule.)
+- `--restricted` removes the shell tools and ignores the settings files, but a rule that arrives by `--settings` still let `Write` work.
+- `--restricted --disallowedTools Edit Write NotebookEdit` wrote nothing. A deny rule wins over an allow rule.
+- `--strict-mcp-config` keeps MCP servers out, and a read question is still answered.
+
+So a read run has the file read and search tools only. Side effect seen in every run without `--restricted`: the hooks of the operator ran. `--restricted` stops them.
+
+Write access refuses each shell command that needs approval, because nobody can answer a prompt (`--permission-prompts none`). A task that must run tests can fail with `--access write`.
 
 ### 7.2 OpenAI Codex (`codex` 0.154.0 and 0.167.0-alpha.4.1)
 
@@ -176,11 +187,16 @@ Output: one JSON object. Expected fields (not verified by a live run today): `re
 | `--effort` | `-c model_reasoning_effort="<level>"`. All five levels (`low`, `medium`, `high`, `xhigh`, `max`) are passed on. The service decides what a model accepts. |
 | `--access read` | `-c sandbox_mode="read-only"` |
 | `--access write` | `-c sandbox_mode="workspace-write"` |
+| Approval, both modes | `-c approval_policy="never"` on `exec` and on `exec resume` |
 | `--resume` | `exec resume <session_id> -` with the same options. `resume` has no `-s` and no `-C` flag. |
 | `--schema` | `--output-schema <file>` |
 | `--cwd` | `-C <dir>` on a new session. Process working directory on `resume`. |
 
-Output: JSON Lines. Take the final answer from the `-o` file. Take the session id and usage from the events. Expected event names (not verified today): `thread.started` with `thread_id`, `item.completed` with `item.type` `agent_message`, `turn.completed` with `usage`, `error`, `turn.failed`.
+Output: JSON Lines. Take the final answer from the `-o` file, else from the LAST `agent_message` item (a run can have several; a real schema run had two). Take the session id and usage from the events. Events confirmed by live runs (2026-11-20): `thread.started` with `thread_id`, `item.completed` with `item.type` `agent_message` (or `error`, a warning, or `command_execution`), `turn.completed` with `usage` (`input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`), `error`, `turn.failed`. `total_tokens` is not reported: it stays `null`.
+
+Approval policy. Live evidence: with the operator's `approval_policy = "on-request"`, `-s read-only` still let `Set-Content` write a file. With `-c approval_policy="never"` the same command got "Access to the path ... is denied". So every run passes `approval_policy="never"`. It is right for write access too: nobody can answer an approval in headless mode.
+
+Limit of read access. The sandbox covers shell commands and file writes. It does **not** cover the computer-use tool and the tools of connected apps: they stay available with `--disable computer_use` and other features off, with `-c mcp_servers={}`, and with a plugin disabled. `--ignore-user-config` removes them, but then every command is rejected on Windows and a read question fails. So a read dispatch to Codex can still act through those tools. An operator decision is open (accept and document, or add a Codex profile that disables the plugins).
 
 Failure events were confirmed by live runs (2026-11-20): `error` and `turn.failed` carry the message (a JSON document, or text), and `item.completed` with `item.type` `error` is a warning. A usage limit arrives as `error` and `turn.failed` with the text "You've hit your usage limit ... try again at 12:10 PM". It maps to `usage-limit`. The success events are still not confirmed by a live run.
 
@@ -296,6 +312,6 @@ Done means: `npm test` passes, `npm run build:dist` leaves no difference in the 
 ## 13. Not verified, and gates
 
 1. The JSON field names of `claude` and `codex` output in sections 7.1 and 7.2 come from memory and from the existing code. A live probe must confirm them. A live probe uses model quota, so the operator must approve it.
-2. The meaning of `--permission-mode manual` in `claude` and of `-c sandbox_mode="read-only"` in `codex` for a read-only task is taken from the help text only. For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan` plus a session deny rule for `command(*)` is the mapping (`--sandbox` was shown not to enforce it).
+2. Read access was tested live for all three targets (section 7). Claude Code: the old mapping was disproved and replaced (7.1). Codex: the sandbox plus `approval_policy="never"` holds for files and shell, and does not hold for computer-use and connected apps (7.2). For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan` plus a session deny rule for `command(*)` is the mapping (`--sandbox` was shown not to enforce it).
 3. `hd doctor` authentication checks for `agy`: no status command is known. Report `unknown` if there is none.
 4. Gates for every session: a live dispatch, an installer run with `--apply`, `git push`, a release, and a message to an external party.

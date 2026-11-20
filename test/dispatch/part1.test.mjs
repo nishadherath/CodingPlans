@@ -342,17 +342,26 @@ test("dispatch: a Codex usage limit gives usage-limit with exit code 1", async (
 test("SKILL.md lists the new codes, the allow-rule note, the override and what read means", async () => {
 	const { readFileSync } = await import("node:fs");
 	const skill = readFileSync(join(import.meta.dirname, "..", "..", "skill", "harness-dispatch", "SKILL.md"), "utf8");
-	for (const needle of ["`permission-denied`", "`usage-limit`", "`denied_actions`", "command(node)", "HARNESS_DISPATCH_<ID>_PATH", "Access `read` means"]) {
+	for (const needle of ["`permission-denied`", "`usage-limit`", "`denied_actions`", "command(node)", "HARNESS_DISPATCH_<ID>_PATH", "What access `read` means for each target"]) {
 		assert.ok(skill.includes(needle), needle);
 	}
 	assert.match(skill, /Do not dispatch to that target again/);
 	assert.doesNotMatch(skill, /Codex does not accept `--effort max`/);
 });
 
-test("SKILL.md says that a read dispatch to Antigravity runs no command and writes no file", async () => {
+// ------------------------------------------------- part 2: the read-access table
+
+test("SKILL.md has the table of read access, the Codex warning and the caller notes", async () => {
 	const { readFileSync } = await import("node:fs");
-	const skill = readFileSync(join(import.meta.dirname, "..", "..", "skill", "harness-dispatch", "SKILL.md"), "utf8");
-	assert.match(skill, /cannot run any shell command/);
-	assert.match(skill, /cannot write files/);
-	assert.doesNotMatch(skill, /with a sandbox|read-only commands run/);
+	const root = join(import.meta.dirname, "..", "..");
+	const skill = readFileSync(join(root, "skill", "harness-dispatch", "SKILL.md"), "utf8");
+	assert.ok(skill.trimEnd().split(/\r?\n/).length <= 120);
+	assert.match(skill, /\| Claude Code \| File read and search tools only\. No shell, no edit tools, no MCP servers/);
+	assert.match(skill, /Computer-use and connected-app tools stay available\. Do not send a read dispatch to Codex with a prompt from a source that you do not trust\./);
+	assert.match(skill, /\| Antigravity \| File read and search tools only\. No shell command\./);
+	assert.match(skill, /Bash\(node:\*\)/);
+	const contract = readFileSync(join(root, "docs", "design", "harness-dispatch-contract.md"), "utf8");
+	for (const needle of ["--restricted --strict-mcp-config", "approval_policy=\"never\"", "permission_denials", "computer-use"]) {
+		assert.ok(contract.includes(needle), needle);
+	}
 });

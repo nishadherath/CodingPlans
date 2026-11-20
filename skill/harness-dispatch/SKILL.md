@@ -53,9 +53,15 @@ Antigravity limits the prompt to 24,000 characters.
 `hd` picks the newest installed `codex` program. `list` shows the one it picked.
 To force a program, set `HARNESS_DISPATCH_<ID>_PATH` to an absolute path, for example `HARNESS_DISPATCH_CODEX_PATH`.
 
-Access `read` means: Antigravity runs in plan mode with a deny rule for every command. It can read and
-search files. It cannot run any shell command (no tests, no `git`) and cannot write files. Codex runs with a read-only sandbox. Claude Code denies each action that needs a prompt; an allow rule
-in the project settings can still permit a write (not proved yet). Do not trust `read` as a security wall.
+What access `read` means for each target:
+
+| Target | Read access |
+|---|---|
+| Claude Code | File read and search tools only. No shell, no edit tools, no MCP servers, no user or project settings, no hooks. |
+| Codex | Shell commands run in a read-only OS sandbox. File writes are refused. **Computer-use and connected-app tools stay available. Do not send a read dispatch to Codex with a prompt from a source that you do not trust.** |
+| Antigravity | File read and search tools only. No shell command. File tools are refused by plan mode. |
+
+Access `write` for Claude Code still refuses each shell command that needs approval. A task that must run tests can fail.
 
 ## Write the brief
 
@@ -101,6 +107,7 @@ Exit codes: 0 done. 1 the target failed (`target-error`, `timeout`, `bad-output`
 - A dispatched agent cannot dispatch again. The variable `HARNESS_DISPATCH_DEPTH` stops loops. Do not change it.
 - A harness whose shell needs an allow rule cannot run `hd` in headless mode without it. Antigravity needs
   `command(node)` under `permissions.allow` in its settings. Without it the call is denied.
+  Claude Code CLI needs a `Bash(node:*)` rule. Codex as the caller did not work in its default Windows sandbox.
 - Check the result yourself. A dispatched answer is a report, not a proof. Run the test that the brief names.
 - After a failure, do not send the same task more than one more time. Read `error` and `log_file` first.
 - A dispatch can take minutes. Set `--timeout` for the task.
