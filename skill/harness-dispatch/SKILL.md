@@ -57,9 +57,11 @@ What access `read` means for each target:
 
 | Target | Read access |
 |---|---|
-| Claude Code | File read and search tools only. No shell, no edit tools, no MCP servers, no user or project settings, no hooks. |
-| Codex | Shell commands run in a read-only OS sandbox. File writes are refused. **Computer-use and connected-app tools stay available. Do not send a read dispatch to Codex with a prompt from a source that you do not trust.** |
-| Antigravity | File read and search tools only. No shell command. File tools are refused by plan mode. |
+| Claude Code | No shell tools, no edit tools, no MCP servers, no user, project or local settings, no hooks from them. Managed settings still apply. |
+| Codex | Shell commands run in a read-only sandbox with no approval. File writes are refused. Plugins, connected apps, computer-use, browser features, hooks and configured MCP servers are off. **The built-in web tool stays available.** |
+| Antigravity | Every shell command is refused. File tools are refused by plan mode. MCP and browser tools were not tested in read mode. |
+
+For all targets: do not put content from a source that you do not trust into a dispatch.
 
 Access `write` for Claude Code still refuses each shell command that needs approval. A task that must run tests can fail.
 

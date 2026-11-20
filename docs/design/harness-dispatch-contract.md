@@ -138,6 +138,7 @@ export default {
   capabilities: { resume, schema, models, efforts: [...] },
   resolve(env),                       // -> { command, prefixArgs } with an absolute command, or undefined
   candidates(env),                    // optional: every { command, prefixArgs, via }. diagnose() takes the highest version.
+  prepare(request, { command, prefixArgs, exec }),  // optional, async: a no-model call before the run. Its result goes into ctx. A DispatchError stops the run.
   buildInvocation(request, ctx),      // -> { args, stdin, tempFiles }   pure, no I/O except ctx.tempFile()
   parseOutput(result, ctx),           // -> { ok, text, session_id, usage, structured, cost_usd, model, denied_actions, error }  pure
   authCheck: { args, parse },         // optional, no model call
@@ -173,7 +174,7 @@ Read access (correction of defect D9). Live evidence, scratch repository with al
 - `--restricted --disallowedTools Edit Write NotebookEdit` wrote nothing. A deny rule wins over an allow rule.
 - `--strict-mcp-config` keeps MCP servers out, and a read question is still answered.
 
-So a read run has the file read and search tools only. Side effect seen in every run without `--restricted`: the hooks of the operator ran. `--restricted` stops them.
+So a read run has no shell tools, no edit tools, no MCP servers (the config files are ignored and `--strict-mcp-config` is set), and no hooks from the user, project or local settings. Managed settings and `--settings` still apply (`claude --help`). Side effect seen in every run without `--restricted`: the hooks of the operator ran.
 
 Write access refuses each shell command that needs approval, because nobody can answer a prompt (`--permission-prompts none`). A task that must run tests can fail with `--access write`.
 
@@ -188,6 +189,8 @@ Write access refuses each shell command that needs approval, because nobody can 
 | `--access read` | `-c sandbox_mode="read-only"` |
 | `--access write` | `-c sandbox_mode="workspace-write"` |
 | Approval, both modes | `-c approval_policy="never"` on `exec` and on `exec resume` |
+| Hardening, `--access read` only | `--disable plugins --disable apps --disable computer_use --disable browser_use --disable browser_use_external --disable in_app_browser --disable hooks`, and `-c mcp_servers.<name>.enabled=false` for each enabled MCP server (a quoted TOML key when the name has a character outside `A-Za-z0-9_-`). On `exec` and on `exec resume`. |
+| Server list, `--access read` only | One call before the run: `<codex> mcp list --json --disable plugins --disable apps` (no model call, limit 20 s, tree kill). Output: a JSON array of `{ name, enabled, disabled_reason, transport, startup_timeout_sec, tool_timeout_sec, auth_status }`. |
 | `--resume` | `exec resume <session_id> -` with the same options. `resume` has no `-s` and no `-C` flag. |
 | `--schema` | `--output-schema <file>` |
 | `--cwd` | `-C <dir>` on a new session. Process working directory on `resume`. |
@@ -196,7 +199,19 @@ Output: JSON Lines. Take the final answer from the `-o` file, else from the LAST
 
 Approval policy. Live evidence: with the operator's `approval_policy = "on-request"`, `-s read-only` still let `Set-Content` write a file. With `-c approval_policy="never"` the same command got "Access to the path ... is denied". So every run passes `approval_policy="never"`. It is right for write access too: nobody can answer an approval in headless mode.
 
-Limit of read access. The sandbox covers shell commands and file writes. It does **not** cover the computer-use tool and the tools of connected apps: they stay available with `--disable computer_use` and other features off, with `-c mcp_servers={}`, and with a plugin disabled. `--ignore-user-config` removes them, but then every command is rejected on Windows and a read question fails. So a read dispatch to Codex can still act through those tools. An operator decision is open (accept and document, or add a Codex profile that disables the plugins).
+Read hardening. The sandbox covers shell commands and file writes only. Live evidence (2026-11-20, Codex 0.167.0, `codex mcp list --json`, no model call):
+
+| Flags | Servers listed as enabled |
+|---|---|
+| none | `cua_repl`, `node_repl`, `trail` |
+| `--disable computer_use`, or four `plugins."<name>".enabled=false` | the same three |
+| `--disable plugins` | `node_repl`, `trail` |
+| `--disable plugins` and `-c mcp_servers={}` | `node_repl`, `trail` (the override does not remove them) |
+| `--disable plugins` and `-c mcp_servers.<name>.enabled=false` for each | none |
+
+An override for a server that the user config does not define fails ("invalid transport"). So `hd` lists the servers first and switches off only the ones that exist. Two live runs with the flags above: a forced prompt saw no computer-use tool, no connected-app tool and no MCP server tool, and a file write was refused; a read question was answered. **Fail closed:** if the list call fails, times out, is not a JSON array, or holds a server without a name, the read run does not start (`target-error`, "The MCP servers could not be listed"). A write run keeps the plugins and servers of the user and makes no list call. `--ignore-user-config` is not used: it makes every command fail on Windows.
+
+Tools that remain in a hardened read run: `exec_command` and `write_stdin` (sandboxed), `apply_patch` (refused by the sandbox), `view_image`, **the built-in web tool** (it opened a web page), image generation, the goal tools, the multi-agent tools and the MCP resource list tools. Residual risk: a hostile prompt could use the web tool to send data out. No flag for it was tested.
 
 Failure events were confirmed by live runs (2026-11-20): `error` and `turn.failed` carry the message (a JSON document, or text), and `item.completed` with `item.type` `error` is a warning. A usage limit arrives as `error` and `turn.failed` with the text "You've hit your usage limit ... try again at 12:10 PM". It maps to `usage-limit`. The success events are still not confirmed by a live run.
 
@@ -230,7 +245,7 @@ Read access. Live evidence (2026-11-20, a scratch repository whose `npm test` wr
 - `--settings {"permissions":{"deny":["command(*)"]}}` works. The command tool answered "Permission denied for unsandboxed(npm test). Matches user-configured deny rule." No file was written. A deny rule wins over an allow rule. The pattern `command` without `(*)` does not match: the command ran.
 - In plan mode a hook refuses the `write_file` tool ("Plan mode is on, and write_file changes the workspace").
 
-So read access is `--mode plan` plus the session deny rule. `--settings` is for the session only and is never saved. **A read dispatch to Antigravity can read and search files. It cannot run any shell command and cannot write files.** A task that needs a command (a test run, `git log`) needs `--access write`. If the agent reports a denial in its answer, the run is still `ok`: the agent answered. Write access is `--mode accept-edits` with no deny rule. Also: `--mode plan` puts `/plan ` in front of the prompt that the model sees.
+So read access is `--mode plan` plus the session deny rule. `--settings` is for the session only and is never saved. **A read dispatch to Antigravity can read and search files. It cannot run any shell command and cannot write files.** MCP and browser tools were not tested in read mode: the deny rule covers `command(*)` only. A task that needs a command (a test run, `git log`) needs `--access write`. If the agent reports a denial in its answer, the run is still `ok`: the agent answered. Write access is `--mode accept-edits` with no deny rule. Also: `--mode plan` puts `/plan ` in front of the prompt that the model sees.
 
 Output: one JSON object with `conversation_id`, `status`, `response`, `error`, `duration_seconds`, `num_turns`, `structured_output`, `usage` (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`), and `denied_actions` (array of `{ action, display_name }`). The run is good only when the exit code is 0 and `status` is `SUCCESS`. Exit code 1 is a general failure or an unknown model.
 
@@ -312,6 +327,6 @@ Done means: `npm test` passes, `npm run build:dist` leaves no difference in the 
 ## 13. Not verified, and gates
 
 1. The JSON field names of `claude` and `codex` output in sections 7.1 and 7.2 come from memory and from the existing code. A live probe must confirm them. A live probe uses model quota, so the operator must approve it.
-2. Read access was tested live for all three targets (section 7). Claude Code: the old mapping was disproved and replaced (7.1). Codex: the sandbox plus `approval_policy="never"` holds for files and shell, and does not hold for computer-use and connected apps (7.2). For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan` plus a session deny rule for `command(*)` is the mapping (`--sandbox` was shown not to enforce it).
+2. Read access was tested live for all three targets (section 7). Claude Code: the old mapping was disproved and replaced (7.1). Codex: the sandbox plus `approval_policy="never"` holds for files and shell; the features and servers switched off in a read run remove computer-use, connected apps and MCP tools; the built-in web tool stays (7.2). For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan` plus a session deny rule for `command(*)` is the mapping (`--sandbox` was shown not to enforce it).
 3. `hd doctor` authentication checks for `agy`: no status command is known. Report `unknown` if there is none.
 4. Gates for every session: a live dispatch, an installer run with `--apply`, `git push`, a release, and a message to an external party.
