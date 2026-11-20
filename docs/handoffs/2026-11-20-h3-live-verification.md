@@ -164,3 +164,42 @@ Not testable: ZCode, OpenCode and Cline as the caller. No headless entry is know
 - Codex read access does not cover computer-use and connected apps. An operator decision is needed: accept and document, or let the installer add a Codex profile that disables those plugins.
 - Codex as the caller: blocked by the Codex Windows sandbox (`node.exe`: access denied).
 - D6 and D7 (POSIX), from H2.
+
+## Codex read access: computer-use, connected apps and MCP servers (13:26, 2026-11-20)
+
+The operator approved a profile test (one temporary file in the Codex home, two live runs). The file was not needed. Feature flags do the same, and `codex mcp list --json` shows their effect with no model call.
+
+Offline checks with the Codex Desktop binary 0.167.0 (`codex mcp list --json`, 0.3 seconds for each call):
+
+| Flags | Servers listed as enabled |
+|---|---|
+| none | `cua_repl`, `node_repl`, `trail` (`codex_app` is listed as off) |
+| `--disable computer_use` | `cua_repl`, `node_repl`, `trail` |
+| `-c plugins."<name>".enabled=false` for four plugins | `cua_repl`, `node_repl`, `trail` |
+| `--disable plugins` | `node_repl`, `trail` |
+| `--disable plugins` and `-c mcp_servers={}` | `node_repl`, `trail` |
+| `--disable plugins` and `-c mcp_servers.node_repl.enabled=false -c mcp_servers.trail.enabled=false` | none |
+| `-c mcp_servers.cua_repl.enabled=false` | Error: "invalid transport in `mcp_servers.cua_repl`". Do not pass an override for a server that the user config does not define. |
+
+Live runs (2, with `gpt-5.6-luna`, effort low, `sandbox_mode="read-only"`, `approval_policy="never"`, the flags below):
+
+- P1, forced: the agent listed its tools. No computer-use tool, no connected-app tool, no MCP server tool. `Set-Content` got "Access to the path ... is denied". No file.
+- P2: a read question got the correct answer. Input tokens fell from about 39,000 to about 32,000 for the same question.
+
+Tools that remain in a hardened read run (from P1): `exec_command` and `write_stdin` (sandboxed), `apply_patch` (refused by the sandbox), `view_image`, `web__run` (it opened a web page), `image_gen__imagegen`, the goal tools, the multi-agent tools, and the MCP resource list tools.
+
+Residual: the built-in web tool stays available. A hostile prompt could use it to send data out. No flag for it was tested.
+
+## Required changes, part 3 (H1 session)
+
+1. **Codex read hardening.** For `--access read` only, on `exec` and on `exec resume`:
+   - Pass `--disable plugins --disable apps --disable computer_use --disable browser_use --disable browser_use_external --disable in_app_browser --disable hooks`.
+   - Before the run, call `<codex> mcp list --json --disable plugins --disable apps` (no model call). For each server whose `enabled` is not `false`, pass `-c mcp_servers.<name>.enabled=false`. Use a quoted TOML key when the name has a character outside `A-Z a-z 0-9 _ -`. If the list call fails or is not JSON, stop the run with `error.code` `target-error` and a message that says the MCP servers could not be listed. Do not continue without the list: a read run with unknown servers is not a read run.
+   - `--access write` keeps the user's plugins and servers.
+2. **D11, D12 (text).** Make the read-access table in `SKILL.md` and the contract say exactly what the live runs prove:
+   - Claude Code: no shell tools, no edit tools, no MCP servers, no user, project or local settings and no hooks from them. Managed settings still apply.
+   - Codex: shell commands run in a read-only sandbox with no approval; file writes are refused; plugins, connected apps, computer-use, browser features, hooks and configured MCP servers are off. The built-in web tool stays available.
+   - Antigravity: every shell command is refused; file tools are refused by plan mode. MCP and browser tools were not tested in read mode.
+   - Keep one warning for all targets: do not put content from a source that you do not trust into a dispatch.
+3. **D13.** When a `HARNESS_DISPATCH_<ID>_PATH` value starts and ends with a quote character, say so in the message.
+4. No live dispatch, no install, no push. A failing test first for item 1 (inject the list call) and item 3. Append "Part 3" to `docs/handoffs/2026-11-20-h1-result.md`.
