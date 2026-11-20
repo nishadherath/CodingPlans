@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20 13:00, after the H2 review of H3, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20 13:50, H3 complete, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,26 +12,29 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-H3 (live verification and corrections) is implemented, passes the hub oracle, and is accepted by H2 with listed defects (`docs/handoffs/2026-11-20-h2-result-part2.md`). No defect blocks an install. Evidence and proof status: `docs/handoffs/2026-11-20-h3-live-verification.md`. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
+H3 (live verification and corrections) is complete. The skill is built, accepted by H2 with listed defects, and verified by live runs on all three targets. Branch: `feat/harness-dispatch`. Nothing is pushed. **The skill is not installed.** The install waits for the operator.
 
-Proved by live runs on 2026-11-20, through `hd` on real targets:
+Evidence: `docs/handoffs/2026-11-20-h3-live-verification.md`. Reviews: `docs/handoffs/2026-11-20-h2-result.md`, `docs/handoffs/2026-11-20-h2-result-part2.md`.
+
+Proved by live runs through `hd` on real targets (2026-11-20):
 
 - Dispatch, `--resume`, `--schema` and `--access write` on Claude Code, Codex and Antigravity.
-- Read access: a forced write wrote no file on each target, and a read question was answered on each. The first mappings were not enforced on any target; all three were corrected (D9 is the Claude case).
+- Read access on each target: a forced write wrote no file, and a read question was answered. D9 (Claude Code) is corrected. The Codex and Antigravity read modes had the same class of defect and are corrected.
+- Codex read runs have no computer-use tool, no connected app and no MCP server (part 3, confirmed by a live run through `hd`).
 - Callers: Claude Code desktop, Claude Code CLI and Antigravity ran `hd.mjs`. The CLI and Antigravity need an allow rule for `node`.
 
-Not resolved:
+Known limits (all stated in `SKILL.md` or in the result files):
 
-- Codex read access does not cover its computer-use tool and connected apps. Operator decision pending: document the limit, test a Codex profile, or require an explicit flag.
+- Codex read runs keep the built-in web tool.
+- Antigravity read runs: MCP and browser tools were not tested.
 - Codex as the caller failed: its Windows sandbox refused to start `node.exe`.
 - ZCode, OpenCode and Cline as the caller: not testable, no headless entry found.
-- D6 and D7 (POSIX only), from the first H2 result.
+- D6 and D7 (POSIX only): open.
+- The part 3 code was reviewed by the hub, not by the H2 session.
 
-Open from the H2 review of H3: D11 (the Codex warning must also name MCP servers and hooks), D12 (the read-access text for Claude Code and Antigravity claims more than the live runs prove: MCP and browser tools were not tested on Antigravity, and managed settings still apply on Claude Code), D13 (a clearer message for a quoted path override). These are text changes. They wait for the operator's decision on the Codex limit, because that decision changes the same text.
+Tests at `f46e10f`: 192 tests, 184 pass, 0 fail, 8 skipped. Bundles are current.
 
-Tests at `3c0621d`: 178 tests, 170 pass, 0 fail, 8 skipped. Bundles are current.
-
-Measured cost to this point (API list price, table `2026-11-20`, `session-cost.mjs`): H1 session 7.53 USD (140 calls), H2 session 6.99 USD (83 calls), hub 24.92 USD (103 calls). Total 39.44 USD. The hub is 63 percent, because every live run had to be in the hub.
+Measured cost (API list price, table `2026-11-20`, `session-cost.mjs`): H1 session 8.57 USD (160 calls), H2 session 6.99 USD (83 calls), hub 27.17 USD (114 calls). Total 42.73 USD.
 
 ## Completed
 
