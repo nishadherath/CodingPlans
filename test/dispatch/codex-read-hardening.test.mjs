@@ -22,7 +22,7 @@ import { fixture, makeRequest, makeResult } from "./helpers.mjs";
 const isWindows = process.platform === "win32";
 
 function tempDir() {
-	const dir = mkdtempSync(join(tmpdir(), "hd-part3-"));
+	const dir = mkdtempSync(join(tmpdir(), "hd-codex-read-"));
 	return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
