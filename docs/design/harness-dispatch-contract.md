@@ -200,14 +200,21 @@ Other targets use the same override and a one-candidate list.
 | Base | `-p <prompt> --output-format json --print-timeout <seconds>s` |
 | Prompt | Argument of `-p`. If the prompt is longer than 24,000 characters, stop with `prompt-too-long`. |
 | `--model`, `--effort` | `--model <slug>`, `--effort <level>` |
-| `--access read` | `--mode plan --sandbox` |
+| `--access read` | `--mode plan --settings {"permissions":{"deny":["command(*)"]}}` (the JSON is one argument) |
 | `--access write` | `--mode accept-edits` |
 | `--resume` | `--conversation <id>` |
 | `--schema` | `--json-schema <path>` |
 | `--cwd` | Process working directory |
 | Models | `agy models` prints `<slug><TAB><label>` lines after one status line |
 
-Read access. Live evidence (2026-11-20): `--mode plan` alone is advice to the model. A forceful prompt made `agy` run `npm test` (an allow rule approved it), and the command wrote a file. `--sandbox` stops the write at the OS level and still lets read-only commands run. So read access is `--mode plan --sandbox`. Write access is `--mode accept-edits` with no `--sandbox`. Also: `--mode plan` puts `/plan ` in front of the prompt that the model sees.
+Read access. Live evidence (2026-11-20, a scratch repository whose `npm test` writes a file, and settings that allow `command(npm test)`):
+
+- `--mode plan` alone is advice to the model. A forceful prompt made `agy` run `npm test`, and the command wrote a file.
+- `--mode plan --sandbox` does not enforce read access. The first call failed in the sandbox (EPERM). The agent called the command again, and it ran unsandboxed with exit 0. The allow rule also grants the `unsandboxed(...)` permission. So `--sandbox` is not used.
+- `--settings {"permissions":{"deny":["command(*)"]}}` works. The command tool answered "Permission denied for unsandboxed(npm test). Matches user-configured deny rule." No file was written. A deny rule wins over an allow rule. The pattern `command` without `(*)` does not match: the command ran.
+- In plan mode a hook refuses the `write_file` tool ("Plan mode is on, and write_file changes the workspace").
+
+So read access is `--mode plan` plus the session deny rule. `--settings` is for the session only and is never saved. **A read dispatch to Antigravity can read and search files. It cannot run any shell command and cannot write files.** A task that needs a command (a test run, `git log`) needs `--access write`. If the agent reports a denial in its answer, the run is still `ok`: the agent answered. Write access is `--mode accept-edits` with no deny rule. Also: `--mode plan` puts `/plan ` in front of the prompt that the model sees.
 
 Output: one JSON object with `conversation_id`, `status`, `response`, `error`, `duration_seconds`, `num_turns`, `structured_output`, `usage` (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`), and `denied_actions` (array of `{ action, display_name }`). The run is good only when the exit code is 0 and `status` is `SUCCESS`. Exit code 1 is a general failure or an unknown model.
 
@@ -289,6 +296,6 @@ Done means: `npm test` passes, `npm run build:dist` leaves no difference in the 
 ## 13. Not verified, and gates
 
 1. The JSON field names of `claude` and `codex` output in sections 7.1 and 7.2 come from memory and from the existing code. A live probe must confirm them. A live probe uses model quota, so the operator must approve it.
-2. The meaning of `--permission-mode manual` in `claude` and of `-c sandbox_mode="read-only"` in `codex` for a read-only task is taken from the help text only. For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan --sandbox` is the mapping.
+2. The meaning of `--permission-mode manual` in `claude` and of `-c sandbox_mode="read-only"` in `codex` for a read-only task is taken from the help text only. For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan` plus a session deny rule for `command(*)` is the mapping (`--sandbox` was shown not to enforce it).
 3. `hd doctor` authentication checks for `agy`: no status command is known. Report `unknown` if there is none.
 4. Gates for every session: a live dispatch, an installer run with `--apply`, `git push`, a release, and a message to an external party.

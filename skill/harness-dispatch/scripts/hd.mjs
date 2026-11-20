@@ -1309,7 +1309,7 @@ __ns_src_dispatch_harnesses_antigravity_mjs = (() => {
 //   --output-format json   one JSON object on stdout
 //   --print-timeout <d>    time limit of the run, a Go duration such as 600s
 //   --mode                 plan (advice only) | accept-edits (write)
-//   --sandbox              terminal restrictions: stops writes at the OS level
+//   --settings <json|path> settings for this session only, never saved
 //   --conversation <id>    continue a conversation
 //   --json-schema <path>   JSON Schema (a path or the schema text)
 // The prompt is an argument of `-p`, so it is limited in length. A longer
@@ -1329,11 +1329,21 @@ const { EFFORTS } = __ns_src_dispatch_request_mjs;
 const { resolveNamed } = __ns_src_dispatch_resolve_mjs;
 
 const MAX_PROMPT_CHARS = 24000;
-// Read access is "--mode plan --sandbox". Live evidence (H3, 2026-11-20): plan
-// mode is advice to the model. A forceful prompt ran a command that an allow
-// rule approved, and the command wrote a file. "--sandbox" stops the write at
-// the OS level and still lets read-only commands run.
-const MODE_ARGS = { read: ["--mode", "plan", "--sandbox"], write: ["--mode", "accept-edits"] };
+// Read access is "--mode plan" plus a session deny rule for every command.
+// Live evidence (H3, 2026-11-20):
+//  - Plan mode alone is advice to the model. A forceful prompt ran `npm test`
+//    (an allow rule approved it), and the command wrote a file.
+//  - "--sandbox" does not enforce read access. The first command failed in the
+//    sandbox, the agent called it again, and the second call ran unsandboxed.
+//    The allow rule also grants the "unsandboxed(...)" permission.
+//  - A deny rule wins over an allow rule: "command(*)" gave "Permission denied
+//    ... Matches user-configured deny rule". The pattern "command" without
+//    "(*)" does not match.
+//  - In plan mode a hook refuses the `write_file` tool.
+// So a read run can read and search files. It cannot run a command, and it
+// cannot write a file. "--settings" is for the session only and is not saved.
+const READ_SETTINGS = JSON.stringify({ permissions: { deny: ["command(*)"] } });
+const MODE_ARGS = { read: ["--mode", "plan", "--settings", READ_SETTINGS], write: ["--mode", "accept-edits"] };
 
 const adapter = {
 	id: "antigravity",
@@ -1441,7 +1451,7 @@ const adapter = {
 function failure(code, message) {
 	return { ok: false, text: "", session_id: null, usage: null, structured: null, cost_usd: null, model: null, error: { code, message } };
 }
-return { MAX_PROMPT_CHARS, default: adapter };
+return { MAX_PROMPT_CHARS, READ_SETTINGS, default: adapter };
 })();
 
 // ======================================================================

@@ -203,18 +203,20 @@ test("codex authCheck", () => {
 // ----------------------------------------------------------- antigravity
 
 const AGY_TAIL = ["--output-format", "json", "--print-timeout", "600s"];
+const AGY_READ = ["--mode", "plan", "--settings", '{"permissions":{"deny":["command(*)"]}}'];
 
 const agyTable = [
 	// Live evidence (H3, run c1): "--mode plan" alone ran a command that an allow
-	// rule approved. "--sandbox" is the OS-level write stop.
-	["read-only default", {}, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan", "--sandbox"]],
+	// rule approved. "--sandbox" did not help (H3b): the agent ran the command again unsandboxed.
+	// A deny rule wins over an allow rule, so read access denies every command.
+	["read-only default", {}, ["-p", "Say OK.", ...AGY_TAIL, ...AGY_READ]],
 	["write", { access: "write" }, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "accept-edits"]],
 	[
 		"model and effort",
 		{ model: "gemini-4-neon-high", effort: "max", timeoutSec: 90 },
-		["-p", "Say OK.", "--output-format", "json", "--print-timeout", "90s", "--model", "gemini-4-neon-high", "--effort", "max", "--mode", "plan", "--sandbox"],
+		["-p", "Say OK.", "--output-format", "json", "--print-timeout", "90s", "--model", "gemini-4-neon-high", "--effort", "max", ...AGY_READ],
 	],
-	["resume and schema", { resume: "conv-1", schema }, ["-p", "Say OK.", ...AGY_TAIL, "--mode", "plan", "--sandbox", "--conversation", "conv-1", "--json-schema", "/abs/schema.json"]],
+	["resume and schema", { resume: "conv-1", schema }, ["-p", "Say OK.", ...AGY_TAIL, ...AGY_READ, "--conversation", "conv-1", "--json-schema", "/abs/schema.json"]],
 ];
 
 for (const [name, overrides, expected] of agyTable) {
@@ -309,9 +311,9 @@ test("codex passes each of the five efforts, and max is not refused", () => {
 	}
 });
 
-test("antigravity write access has no sandbox flag", () => {
+test("antigravity write access has no deny rule and no sandbox flag", () => {
 	const args = antigravity.buildInvocation(makeRequest({ to: "antigravity", access: "write" }), makeCtx()).args;
-	assert.ok(!args.includes("--sandbox"));
+	assert.ok(!args.includes("--sandbox") && !args.includes("--settings"));
 });
 
 test("antigravity real output: a resumed conversation", () => {
@@ -365,4 +367,13 @@ test("a usage limit is usage-limit in each adapter", () => {
 	assert.equal(agyParsed.error.code, "usage-limit");
 	const agyNoJson = antigravity.parseOutput(makeResult({ code: 1, stderr: "quota exceeded: you have exceeded your current quota" }));
 	assert.equal(agyNoJson.error.code, "usage-limit");
+});
+
+test("antigravity read access: no --sandbox, and the deny rule is one JSON argument", () => {
+	const args = antigravity.buildInvocation(makeRequest({ to: "antigravity" }), makeCtx()).args;
+	assert.ok(!args.includes("--sandbox"));
+	const settings = args[args.indexOf("--settings") + 1];
+	assert.deepEqual(JSON.parse(settings), { permissions: { deny: ["command(*)"] } });
+	assert.equal(args.filter((arg) => arg === "--settings").length, 1);
+	assert.doesNotMatch(args.join(" "), /dangerously|bypass/i);
 });

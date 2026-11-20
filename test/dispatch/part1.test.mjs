@@ -348,3 +348,11 @@ test("SKILL.md lists the new codes, the allow-rule note, the override and what r
 	assert.match(skill, /Do not dispatch to that target again/);
 	assert.doesNotMatch(skill, /Codex does not accept `--effort max`/);
 });
+
+test("SKILL.md says that a read dispatch to Antigravity runs no command and writes no file", async () => {
+	const { readFileSync } = await import("node:fs");
+	const skill = readFileSync(join(import.meta.dirname, "..", "..", "skill", "harness-dispatch", "SKILL.md"), "utf8");
+	assert.match(skill, /cannot run any shell command/);
+	assert.match(skill, /cannot write files/);
+	assert.doesNotMatch(skill, /with a sandbox|read-only commands run/);
+});

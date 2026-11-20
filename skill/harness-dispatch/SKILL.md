@@ -53,8 +53,8 @@ Antigravity limits the prompt to 24,000 characters.
 `hd` picks the newest installed `codex` program. `list` shows the one it picked.
 To force a program, set `HARNESS_DISPATCH_<ID>_PATH` to an absolute path, for example `HARNESS_DISPATCH_CODEX_PATH`.
 
-Access `read` means: Antigravity runs in plan mode with a sandbox (no file writes, read-only commands run).
-Codex runs with a read-only sandbox. Claude Code denies each action that needs a prompt; an allow rule
+Access `read` means: Antigravity runs in plan mode with a deny rule for every command. It can read and
+search files. It cannot run any shell command (no tests, no `git`) and cannot write files. Codex runs with a read-only sandbox. Claude Code denies each action that needs a prompt; an allow rule
 in the project settings can still permit a write (not proved yet). Do not trust `read` as a security wall.
 
 ## Write the brief
