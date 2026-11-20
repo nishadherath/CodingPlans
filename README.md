@@ -1,220 +1,93 @@
-# CodingPlans
+# harness-dispatch
 
-> **New: the skill `harness-dispatch`.** An agent in one coding harness can send a
-> task to a different harness (Claude Code, OpenAI Codex, Google Antigravity) and
-> get one JSON result. The skill is in `skill/harness-dispatch/`. Its instructions
-> are in `SKILL.md`. Its script is one file with no dependencies: `scripts/hd.mjs`.
-> The specification is `docs/design/harness-dispatch-contract.md`.
->
-> ```
-> node bin/harness-dispatch.mjs list       # targets, paths, versions (no model call)
-> node bin/harness-dispatch.mjs doctor     # installed, startable, signed in
-> node scripts/install-skill.mjs           # dry run: shows where the skill would go
-> ```
->
-> Run `npm test` for the tests. Run `npm run build:dist` after you change `src/` or
-> `bin/`. The rest of this file describes the older Cline provider tool.
+`harness-dispatch` is a skill for coding agents. An agent in one harness runs one script and sends a task to a different coding agent CLI. The script returns one JSON result.
+The targets are Claude Code, OpenAI Codex and Google Antigravity. The script has no dependencies and needs Node 22 or later.
+The skill is built and tested. It is **not installed** by this repository. You install it yourself ([docs/install.md](docs/install.md)).
 
-Enable **CLI-backed coding plans** as model providers in [Cline](https://cline.bot) —
-currently **Claude Code** and **OpenAI Codex** — and prove they actually work.
+## Why it exists
 
-Cline already ships both providers (`claude-code` and `openai-codex-cli`). What it
-does *not* ship is the setup, and the setup is where it breaks. This package
-automates the parts that can be automated, refuses to fake the parts that cannot,
-and verifies the result through the same code path Cline actually uses.
+Each harness reaches only the models and the plan quota of its own vendor. You often hold several subscriptions on one machine.
+Without this skill, you must copy a task by hand from one tool to the next.
+With this skill, the agent in front of you does that work. The answer comes back as a small JSON object, so the agent keeps its context small.
+The skill starts each target by its absolute path, with no shell. It is read-only by default. It has a guard that stops dispatch loops.
 
----
+## What you can do with it
 
-## Why this exists
+- **A second opinion from a different vendor.** Claude Code writes a change. It sends the diff to Codex and asks for a review. A model of another family finds other defects.
+- **A task on a cheaper model.** Your main harness uses a large model. It sends a routine task (a summary, a file search, a test list) to a cheaper model that it does not offer itself.
+- **Work on a subscription that has quota left.** One plan is at its limit. The agent sends the task to another plan, and the work continues.
+- **A structured answer.** Give a JSON Schema. The answer comes back in the `structured` field.
+- **A follow-up.** Give the `session_id` of an earlier result to `--resume`. The target keeps the earlier context.
 
-Adding these providers is four things, and three of them fail silently:
+## How it works
 
-| # | Requirement | How it fails when missed |
+The agent runs `hd.mjs`. The script checks the depth guard, finds the target program, starts it with the right flags, and reads its output.
+
+```
+caller agent --(node hd.mjs run --to codex ...)--> hd.mjs --(spawn, no shell)--> target CLI
+     ^                                                |                              |
+     |                                                +-- depth guard, access flags  |
+     +----------- one JSON envelope on stdout <-------+------ raw output in a log <---+
+```
+
+## Quick start
+
+Run these commands in this repository. They start no model.
+
+```powershell
+node bin/harness-dispatch.mjs list
+node bin/harness-dispatch.mjs doctor
+```
+
+`list` shows each target, its program and its version. `doctor` shows if each target is installed, startable and signed in.
+The next command sends a task to a model. It uses your plan quota. Access is `read`, the default.
+
+```powershell
+node bin/harness-dispatch.mjs run --to claude --prompt "List the exported functions of src/dispatch/index.mjs."
+```
+
+The same commands run from the skill folder after you install it: `node <skill folder>/scripts/hd.mjs ...`. The full list of commands is in [docs/usage.md](docs/usage.md).
+
+## Targets and callers
+
+Proof state on 2026-11-20. All live runs were on Windows 11.
+
+| Role | Harness | State |
 |---|---|---|
-| 1 | The CLI is installed | `spawn ENOENT` at first use |
-| 2 | The CLI is **spawnable by name** | `ENOENT: uv_spawn 'codex'` — see below |
-| 3 | The optional peer package resolves | `The ... provider requires the optional 'ai-sdk-provider-*' package` |
-| 4 | The CLI is authenticated | `Failed to authenticate: OAuth session expired` |
+| Target | Claude Code | Dispatch, `--resume`, `--schema`, `--access write` and enforced read access: proved by live runs. |
+| Target | OpenAI Codex | The same five items: proved. A schema run gave a valid `structured` object, but the cheap test model gave a wrong answer text. |
+| Target | Google Antigravity | The same five items: proved. |
+| Caller | Claude Code desktop | Proved. |
+| Caller | Claude Code CLI | Proved. It needs the allow rule `Bash(node:*)`. |
+| Caller | Antigravity | Proved. It needs the allow rule `command(node)`. |
+| Caller | Codex | **Failed.** Its Windows sandbox refused to start `node.exe`. |
+| Caller | ZCode, OpenCode, Cline | Not tested. The installer has folders for ZCode and OpenCode. It has none for Cline. |
 
-### The bug this package was written for
+## Known limits
 
-`claude-code` and `openai-codex-cli` are **not symmetric** in Cline's own source.
-From `sdk/packages/llms/src/providers/vendors/community.ts`:
+- Codex read runs keep the built-in web tool.
+- Antigravity read runs: MCP and browser tools were not tested.
+- Claude Code in write mode refuses each shell command that needs approval.
+- Only Windows 11 was tested. Two POSIX defects are open.
+- The Codex CLI must be recent. Version 0.154.0 was rejected by the service.
 
-```ts
-// Claude: Cline resolves a real executable path itself.
-if (defaultSettings.pathToClaudeCodeExecutable === undefined) {
-    const executable = resolveClaudeExecutable();      // scans for claude.exe
-    ...
-}
+The details are in [docs/safety.md](docs/safety.md).
 
-// Codex: Cline forwards options and stops. No path resolution at all.
-const provider = createCodexExec(readOptions(config));
-```
+## Documents
 
-So Codex falls through to `ai-sdk-provider-codex-cli`, which tries
-`createRequire(...).resolve("@openai/codex/package.json")` and, failing that
-inside a Bun-compiled binary, spawns the bare string `"codex"`.
+| Document | Content |
+|---|---|
+| [docs/install.md](docs/install.md) | Requirements, the installer, the folder of each harness, the allow rules. |
+| [docs/usage.md](docs/usage.md) | Commands, flags, the result envelope, error codes, how to write a brief. |
+| [docs/safety.md](docs/safety.md) | What read and write access mean for each target, and the limits. |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Each error code, with the cause and the action. |
+| [docs/development.md](docs/development.md) | Layout, tests, bundles, how to add a target. |
+| [docs/legacy-cline-providers.md](docs/legacy-cline-providers.md) | The older Cline provider repair tool. |
+| [docs/README.md](docs/README.md) | Index of all documents, and the project records. |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes. |
+| [skill/harness-dispatch/SKILL.md](skill/harness-dispatch/SKILL.md) | The instructions that the calling agent reads. |
+| [docs/design/harness-dispatch-contract.md](docs/design/harness-dispatch-contract.md) | The specification. |
 
-**On Windows that is not spawnable.** `npm` installs `codex` as an extensionless
-shim plus `codex.cmd`. Bun's `uv_spawn` does not apply `PATHEXT`, so both fail.
-Only a real `codex.exe` works — and npm ships that only inside
-`node_modules/@openai/codex/node_modules/@openai/codex-win32-*/vendor/.../bin/`.
+## Licence
 
-`claude` works because the Claude Code installer puts a genuine `claude.exe` in
-`~/.local/bin`. **That asymmetry is the whole bug**, and it is why "it's
-installed" and "it works" are tracked as two separate facts throughout this tool.
-
----
-
-## Install
-
-```bash
-npm install -g cline-coding-plans
-# or, with no install at all:
-node dist/cli.mjs doctor
-```
-
-Requires **Node 22+** (matching `@cline/llms`) and no other dependencies.
-
-## Use
-
-```bash
-coding-plans doctor      # read-only diagnosis; exit 1 if unhealthy
-coding-plans fix         # link CLIs onto PATH, install optional peers
-coding-plans verify      # prove it works, through the real Cline host
-coding-plans setup       # fix, then verify
-coding-plans plans       # list supported plans
-```
-
-Useful flags: `--plan <id>` (repeatable), `--json`, `--dry-run`, `--no-host`,
-`--cwd <path>`, `--model <id>`, `--timeout <ms>`, `--no-color`.
-
-Exit codes: `0` healthy · `1` unhealthy · `2` bad usage.
-
-### Programmatic
-
-```js
-import { setup, detectCli } from "cline-coding-plans";
-
-const { results, summary } = await setup({ selection: ["openai-codex-cli"] });
-if (!summary.ok) console.error(summary.errors);
-```
-
----
-
-## What each command does
-
-### `doctor` — read-only
-
-Per plan, reports and gates on:
-
-- **installed** — any artefact on disk (PATH, `~/.local/bin`, `~/.claude/local`,
-  Windows `Programs`, the npm vendor directory, or a bounded filesystem walk).
-- **spawnable** — a **real executable** on `PATH`. On Windows a `.cmd`/`.bat`
-  shim deliberately does not count, because that is the failure mode above.
-- **peer package** — the optional dependency, resolved from the same
-  `node_modules` roots Cline's host would use.
-- **authenticated** — parsed per CLI (`claude auth status` is JSON;
-  `codex login status` is a human sentence plus an exit code).
-- **stale link** — a previously *copied* binary (Windows fallback when symlinks
-  are unavailable) compared against its source version.
-
-**Hard gate:** if the CLI is not installed the plan is refused with an install
-hint, rather than "fixed" into a state that fails at first use.
-
-### `fix` — non-interactive repair only
-
-1. If the CLI is not spawnable, link a real executable onto a `PATH` dir.
-   Prefers a symlink; falls back to a copy on Windows / no-symlink filesystems,
-   and records provenance next to the copy so `doctor` can detect staleness.
-   The target directory is chosen to be one already on `PATH` — on the reference
-   machine that is the same `~/.local/bin` that already holds `claude.exe`.
-2. Install the missing optional peer package globally, so it is resolvable by
-   the Cline host.
-
-**It never performs an interactive login.** `claude auth login` and `codex login`
-open a browser and then block on stdin for a code. Spawned from a non-TTY parent
-they cannot complete, and killing one mid-flight leaves the user staring at a
-dead `localhost:<port>/callback`. This tool reports the exact command to run and
-gets out of the way.
-
-### `verify` — layered proof
-
-| Layer | What it proves | Why it exists |
-|---|---|---|
-| **CLI** | The CLI answers a trivial prompt on its own | Cheap; isolates a broken CLI from a broken host |
-| **Host** | The real `cline` binary returns a `run_result` for **our** provider id | The only layer that reproduces the production spawn path |
-
-The host layer asserts `run_result.model.provider === plan.id`, so a green CLI
-layer can never be mistaken for end-to-end proof. This distinction is the whole
-reason the tool exists: during development the provider layer returned `PONG`
-while the compiled host failed with `ENOENT`.
-
-A missing host is reported as **`UNVERIFIED`**, distinct from pass and from fail.
-
----
-
-## Cross-platform notes
-
-- **Windows** is the hard case; see the bug above. Symlinks need Developer Mode
-  or admin, so a copy is used and staleness is tracked.
-- **POSIX** needs none of this — `codex` on `PATH` is a real executable. The
-  checks still run and report accurately.
-- **Discovery is PATH-driven**, not hard-coded to one layout, so nvm, fnm,
-  volta, asdf, Homebrew, distro packages, and arbitrary Windows drive layouts
-  all work.
-- `globalRoots()` is intentionally cross-platform rather than host-conditional:
-  machines routinely hold several layouts at once, and probing a missing
-  directory is free.
-
-## Model selection
-
-Cline's built-in default for `openai-codex-cli` is **`gpt-5.6-sol`**, which real
-ChatGPT accounts reject:
-
-> The 'gpt-6-sol' model is not supported when using Codex with a ChatGPT account.
-
-This package defaults to **`gpt-5.5`** (verified working) and documents the
-other candidates in `src/plans.mjs`. Override with `--model`.
-
-## Adding a plan
-
-Edit `src/plans.mjs`. A plan declares its `cli`, `peerPackage`, `peerRange`,
-`defaultModelId`, `modelCandidates`, `installHint`, and how to verify. The
-gate logic, fixer, and doctor are all plan-agnostic.
-
----
-
-## Repository layout
-
-```
-src/plans.mjs            plan catalogue (the Cline contract per provider)
-src/detect/cli.mjs       installed vs spawnable; vendor-binary discovery
-src/detect/cline.mjs     locate the compiled Cline host + @cline/llms
-src/fix/executable.mjs   link a real executable onto PATH; staleness
-src/fix/peers.mjs        global node_modules roots; install optional peers
-src/check/auth.mjs       per-CLI auth parsing; never automates login
-src/check/verify.mjs     the two verification layers
-src/setup.mjs            doctor / fix / verify / setup orchestration
-bin/coding-plans.mjs     CLI
-scripts/build-dist.mjs   single-file bundler
-test/detect.test.mjs     unit tests (no network, no spend)
-test/live.test.mjs       opt-in live tests
-```
-
-## Tests
-
-```bash
-node --test test/            # unit only — free, no credentials
-CODING_PLANS_LIVE=1 node --test test/live.test.mjs   # opt-in, costs money
-```
-
-Unit tests reproduce the Windows shim-only state in a temp `PATH` and assert it
-is reported as *not spawnable* — the original bug, as a regression test.
-
-## License
-
-Apache-2.0
-
-
+Apache-2.0. See [LICENSE](LICENSE).
