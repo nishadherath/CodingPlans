@@ -23,7 +23,7 @@ const exeName = (name) => (isWindows ? `${name}.exe` : name);
 
 /** A temporary folder that the test removes in `cleanup`. */
 function tempDir() {
-	const dir = mkdtempSync(join(tmpdir(), "hd-part1-"));
+	const dir = mkdtempSync(join(tmpdir(), "hd-resolve-"));
 	return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
