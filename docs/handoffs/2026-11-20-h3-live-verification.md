@@ -19,7 +19,7 @@ The operator's instruction of 2026-11-20: do not install; correct D9; prove the 
 - The H1 session (`claude-sonnet-5-5`, holds the code context) makes the code changes in "Required changes".
 - The H2 session (`claude-opus-5-5`) reviews the diff.
 
-## Proof status
+## Proof status at 11:30 (superseded by "Final proof status" below)
 
 | # | Item | State | Evidence |
 |---|---|---|---|
@@ -124,3 +124,43 @@ Guardrails: 1 not applicable (no fresh session). 2: no compaction ahead (C_end b
 Adversarial pass. Opposite verdict: a fresh Sonnet session reads only 30,000 tokens and carries no stale assumptions from the first build, and the H1 context of 324,000 tokens costs more on each turn. Inputs: T for the code changes can double if the Codex version selection is hard on Windows; at T 80 the H1 session costs about 6.7 USD and a fresh session about 5.6 USD, so a fresh session wins by more than 10 percent. Recompute: fragile, the verdict for H1 flips at T of about 60 or more. Kept, because T 40 is the stated value and the range ends at 60. If H1 passes 60 turns, the hub stops it and starts a fresh session with this file as the brief.
 
 Cost of deciding: context at start 435,077 (usage tool); at end about 480,000 (self-estimate); output about 3,000 tokens (self-estimate); about 8 minutes; priced at about 0.25 USD for the record itself, table `2026-11-20`.
+
+## Final proof status (12:30, 2026-11-20)
+
+All runs are live runs by the hub. Scratch repositories are under `.hd-live/` (ignored by Git). "Forced" means a prompt that orders the agent to make the tool call and to try a second way.
+
+| # | Item | Claude Code | Codex | Antigravity |
+|---|---|---|---|---|
+| 1 | Real dispatch through `hd run` | proved (C1, `text` "OK") | proved (X1, `text` "OK", Codex Desktop binary 0.167.0) | proved |
+| 2 | `--resume` | proved (C2 repeated the first prompt) | proved (X2) | proved (A1) |
+| 3 | `--schema` | proved (C3, `{"answer":"OK"}`) | mechanism proved (X3: `structured` is an object of the schema; the low-cost model gave a wrong answer text) | proved (A2) |
+| 4 | `--access write` | proved (C5, file created) | proved (X5; and y3 with `approval_policy="never"`) | proved (A4) |
+| 5 | Read access is enforced | present mapping: **disproved** (k1b). Final mapping: proved (k6, y4) | present mapping: **disproved** (X4, x4b). With `approval_policy="never"`: proved for files and shell (x4c, z1, z2). **Not enforced for computer-use and connected apps** (z1, z3) | `--mode plan` alone: **disproved** (c1). Plan plus deny rule: proved through `hd` (R3, R4) |
+| 6 | The harness as the caller of `hd.mjs` | Desktop: proved (hub). CLI: proved (W2, needs an allow rule for `node`) | **failed** (W1: the Codex sandbox refused to start `node.exe`) | proved (A6, needs an allow rule `command(node)`) |
+
+Not testable: ZCode, OpenCode and Cline as the caller. No headless entry is known on this machine.
+
+### Read access, the evidence in short
+
+- **Claude Code.** k1b: with allow rules that apply (`Bash(*)`, `Write`, passed with `--settings`), the mapping `--permission-mode manual --permission-prompts none` ran `npm test` and wrote the file. This is D9. Claude Code ignores the allow rules of a workspace that is not trusted (k1), so D9 needs a trusted workspace or a user rule. k4b: `--restricted` removes the shell tools and ignores the settings files, but a rule that arrives by `--settings` still let `Write` work. k6: `--restricted --disallowedTools Edit Write NotebookEdit` wrote nothing against the same rules. y4: with `--strict-mcp-config` added, a read question is answered and no MCP tool is present. Side effect seen in every run without `--restricted`: the operator's hooks ran and made a `graft` folder in the target directory.
+- **Codex.** x4b: with `-s read-only` and the operator's `approval_policy = "on-request"`, `Set-Content` wrote the file. x4c: with `-c approval_policy="never"` added, the same command got "Access to the path ... is denied". z2: a read question still works. z1, z3: the computer-use tool `cua_repl` and the connected-app tools stayed available with `--disable computer_use` and four more features, `-c mcp_servers={}`, and `-c plugins."<name>".enabled=false`. y1, y2: `--ignore-user-config` removes them but then every command is rejected on Windows, and a read question fails.
+- **Antigravity.** See "Antigravity read access" above, and R1: `--sandbox` did not hold. R3: through `hd` with the deny rule, the command and the file tool were both refused and no file was written.
+
+## Required changes, part 2 (H1 session)
+
+1. **Claude read mapping (this corrects D9).** `--access read` passes: `-p --output-format json --permission-prompts none --permission-mode manual --restricted --strict-mcp-config --disallowedTools Edit Write NotebookEdit`. Put `--disallowedTools` and its three values last (the option takes several values; the prompt is on `stdin`). `--access write` is unchanged.
+2. **Claude `permission_denials`.** Map each entry to `denied_actions` as its `tool_name`. Fixture: `claude/real-permission-denials.stdout.json` (`is_error` false, the agent answered: the run stays `ok`).
+3. **Codex approval policy.** Pass `-c approval_policy="never"` for read and for write, on new sessions and on `resume`.
+4. **Fixtures.** Use the new real captures in the parser tests: `claude/real-ok`, `claude/real-resume`, `claude/real-schema`, `codex/real-ok`, `codex/real-resume`, `codex/real-schema-trimmed` (tool-call lines removed by the hub because they held private desktop state), `codex/real-sandbox-denied`. Remove or rename each synthetic fixture that a real one replaces. Check the usage field names against the real files.
+5. **Contract and `SKILL.md`.** One table "what read access means" for each target:
+   - Claude Code: file read and search tools only. No shell, no edit tools, no MCP servers, no user or project settings, no hooks.
+   - Codex: shell commands run in a read-only OS sandbox with no approval. File writes are refused. **Computer-use and connected-app tools stay available: do not send a read dispatch to Codex with a prompt from a source that you do not trust.**
+   - Antigravity: file read and search tools only. No shell command. File tools are refused by plan mode.
+   Also state: write access for Claude Code refuses each shell command that needs approval; a caller harness needs permission to run `node` (Antigravity: `command(node)`; Claude Code CLI: a `Bash(node:*)` rule); Codex as the caller did not work in its default Windows sandbox.
+6. No live dispatch, no install, no push. Tests and `check:bundles` green. Append "Part 2" to `docs/handoffs/2026-11-20-h1-result.md`.
+
+## Open after part 2
+
+- Codex read access does not cover computer-use and connected apps. An operator decision is needed: accept and document, or let the installer add a Codex profile that disables those plugins.
+- Codex as the caller: blocked by the Codex Windows sandbox (`node.exe`: access denied).
+- D6 and D7 (POSIX), from H2.
