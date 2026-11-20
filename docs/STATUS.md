@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20, release 0.2.0, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20, release 0.2.1 and first install, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,7 +12,25 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-Release `0.2.0` is on `main` with the tag `v0.2.0`. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, and documented. **The skill is not installed.** The install waits for the operator: `docs/install.md`.
+Release `0.2.1` is on `main` with the tag `v0.2.1`. It has the same behaviour as `0.2.0`; only the version number changed. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, documented, and **installed on the operator's machine**.
+
+Install record (2026-11-20, on the operator's instruction, `node scripts/install-skill.mjs --apply`):
+
+| Harness | Skill folder | Check |
+|---|---|---|
+| Claude Code | `~/.claude/skills/harness-dispatch` | Files identical to the repository, `hd --version` gives 0.2.1 |
+| Codex | `~/.codex/skills/harness-dispatch` | Same |
+| Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same |
+| OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same |
+| ZCode | `~/.zcode/skills/harness-dispatch` | Same |
+| Shared agents folder | `~/.agents/skills/harness-dispatch` | Same |
+| Cline | none | Not installed: no skill folder is known |
+
+Checked after the install, with no model call: `hd list` and `hd doctor` run from an installed copy and find the three targets. Not checked: that each harness loads the skill in a new session. Not done: no allow rule for `node` was added to any harness. Antigravity and the Claude Code CLI need that rule before they can run the script as a caller (`docs/install.md`).
+
+The installed copies do not follow the repository. Run the installer again after each change to `skill/harness-dispatch/`.
+
+Session dispatch for the install stage: not handed off. About 7 turns remained and the stage has outward steps (writes in the home folder, push), so the hub did the work (guardrails 1 and 3).
 
 Start here: `README.md`. User documents: `docs/install.md`, `docs/usage.md`, `docs/safety.md`, `docs/troubleshooting.md`, `docs/development.md`. Evidence: `docs/handoffs/2026-11-20-h3-live-verification.md`. Reviews: `docs/handoffs/2026-11-20-h2-result.md`, `docs/handoffs/2026-11-20-h2-result-part2.md`.
 
@@ -46,7 +64,7 @@ Measured cost of the whole project (API list price, table `2026-11-20`, `session
 
 Total: 47.28 USD. The hub is 64 percent.
 
-Next work, none approved: the install (operator); the Codex web tool in read mode; Codex as the caller; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
+Next work, none approved: the allow rules for callers (operator); a check that each harness loads the skill; the Codex web tool in read mode; Codex as the caller; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
 
 ## Completed
 
