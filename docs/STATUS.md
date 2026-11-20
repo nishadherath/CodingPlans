@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20 12:45, during the H2 review of H3, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20 13:00, after the H2 review of H3, by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,7 +12,7 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-H3 (live verification and corrections) is implemented and passes the hub oracle. The H2 session reviews the diff now. Evidence and proof status: `docs/handoffs/2026-11-20-h3-live-verification.md`. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
+H3 (live verification and corrections) is implemented, passes the hub oracle, and is accepted by H2 with listed defects (`docs/handoffs/2026-11-20-h2-result-part2.md`). No defect blocks an install. Evidence and proof status: `docs/handoffs/2026-11-20-h3-live-verification.md`. Branch: `feat/harness-dispatch`. Nothing is pushed. The skill is not installed.
 
 Proved by live runs on 2026-11-20, through `hd` on real targets:
 
@@ -27,7 +27,11 @@ Not resolved:
 - ZCode, OpenCode and Cline as the caller: not testable, no headless entry found.
 - D6 and D7 (POSIX only), from the first H2 result.
 
-Tests at `1524e49`: 178 tests, 170 pass, 0 fail, 8 skipped. Bundles are current.
+Open from the H2 review of H3: D11 (the Codex warning must also name MCP servers and hooks), D12 (the read-access text for Claude Code and Antigravity claims more than the live runs prove: MCP and browser tools were not tested on Antigravity, and managed settings still apply on Claude Code), D13 (a clearer message for a quoted path override). These are text changes. They wait for the operator's decision on the Codex limit, because that decision changes the same text.
+
+Tests at `3c0621d`: 178 tests, 170 pass, 0 fail, 8 skipped. Bundles are current.
+
+Measured cost to this point (API list price, table `2026-11-20`, `session-cost.mjs`): H1 session 7.53 USD (140 calls), H2 session 6.99 USD (83 calls), hub 24.92 USD (103 calls). Total 39.44 USD. The hub is 63 percent, because every live run had to be in the hub.
 
 ## Completed
 
