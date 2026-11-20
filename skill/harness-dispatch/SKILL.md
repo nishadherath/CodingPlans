@@ -48,8 +48,14 @@ node "<folder of this file>/scripts/hd.mjs" run --to antigravity --prompt-file b
 node "<folder of this file>/scripts/hd.mjs" run --to codex --resume <session_id> --prompt "Now check the tests too."
 ```
 
-Codex does not accept `--effort max`. Antigravity limits the prompt to 24,000 characters.
+Antigravity limits the prompt to 24,000 characters.
 `--model` goes to the target unchanged. Use `models --to antigravity` to see valid ids.
+`hd` picks the newest installed `codex` program. `list` shows the one it picked.
+To force a program, set `HARNESS_DISPATCH_<ID>_PATH` to an absolute path, for example `HARNESS_DISPATCH_CODEX_PATH`.
+
+Access `read` means: Antigravity runs in plan mode with a sandbox (no file writes, read-only commands run).
+Codex runs with a read-only sandbox. Claude Code denies each action that needs a prompt; an allow rule
+in the project settings can still permit a write (not proved yet). Do not trust `read` as a security wall.
 
 ## Write the brief
 
@@ -75,11 +81,17 @@ Do not put secrets in a prompt. The target keeps its own session history, and `h
 | `usage`, `cost_usd` | Tokens and cost as the target reports them. `null` means not reported. |
 | `model`, `harness`, `access` | What did the work. |
 | `error` | `null`, or `{ code, message }`. |
+| `denied_actions` | Actions that the target denied, such as `"command: Bash"`. `[]` when none. |
 | `log_file` | The raw output of the target. Read it when `text` is cut or `error` is unclear. |
 
-Exit codes: 0 done. 1 the target failed (`target-error`, `timeout`, `bad-output`, `not-authenticated`).
-2 bad usage (`usage`, `prompt-too-long`). 3 the target is not available (`not-installed`, `not-startable`).
-4 the depth guard refused (`depth-exceeded`).
+Exit codes: 0 done. 1 the target failed (`target-error`, `timeout`, `bad-output`, `not-authenticated`,
+`permission-denied`, `usage-limit`). 2 bad usage (`usage`, `prompt-too-long`).
+3 the target is not available (`not-installed`, `not-startable`). 4 the depth guard refused (`depth-exceeded`).
+
+- `usage-limit`: the target hit a usage or rate limit. Do not dispatch to that target again until it resets.
+  Tell the operator, with the reset time from `error.message`. Use another target, or wait.
+- `permission-denied`: the target needed a permission that it cannot ask for in headless mode. `denied_actions`
+  names it. Tell the operator. The operator can add an allow rule in the settings of the target. Do not retry.
 
 ## Rules
 
@@ -87,6 +99,8 @@ Exit codes: 0 done. 1 the target failed (`target-error`, `timeout`, `bad-output`
 - Run `doctor --to <id>` one time before the first dispatch to a target.
   If it says `authenticated: false`, tell the operator. Do not try to sign in for them.
 - A dispatched agent cannot dispatch again. The variable `HARNESS_DISPATCH_DEPTH` stops loops. Do not change it.
+- A harness whose shell needs an allow rule cannot run `hd` in headless mode without it. Antigravity needs
+  `command(node)` under `permissions.allow` in its settings. Without it the call is denied.
 - Check the result yourself. A dispatched answer is a report, not a proof. Run the test that the brief names.
 - After a failure, do not send the same task more than one more time. Read `error` and `log_file` first.
 - A dispatch can take minutes. Set `--timeout` for the task.

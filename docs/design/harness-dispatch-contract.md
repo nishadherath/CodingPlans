@@ -83,10 +83,17 @@ Exit codes:
 | Code | Meaning | `error.code` values |
 |---|---|---|
 | 0 | The target completed the task | none |
-| 1 | The target started and failed | `target-error`, `timeout`, `bad-output`, `not-authenticated` |
+| 1 | The target started and failed | `target-error`, `timeout`, `bad-output`, `not-authenticated`, `permission-denied`, `usage-limit` |
 | 2 | Bad usage | `usage`, `prompt-too-long` |
 | 3 | The target is not available | `not-installed`, `not-startable` |
 | 4 | The depth guard refused | `depth-exceeded` |
+
+Two codes need a decision from the caller:
+
+- `permission-denied`: the target needed a permission that its headless mode cannot ask for. The message names the denied actions. The operator can add an allow rule in the settings of the target. Do not try again with a bypass flag.
+- `usage-limit`: the target reported a usage or rate limit. Do not dispatch again to that target until the limit resets. The message can hold the reset time.
+
+Environment variable `HARNESS_DISPATCH_<ID>_PATH` (for example `HARNESS_DISPATCH_CODEX_PATH`; `<ID>` is the upper-case target id): an absolute path to the executable of that target. It wins over the search of section 7. A relative value gives `usage` (exit 2). A path that does not exist gives `not-installed` (exit 3). The override is not compared by version.
 
 ## 5. Result envelope
 
@@ -107,6 +114,7 @@ Exit codes:
   "duration_ms": 0,
   "exit_code": 0,
   "error": null,
+  "denied_actions": [],
   "log_file": "path"
 }
 ```
@@ -117,6 +125,8 @@ Exit codes:
 4. `text` longer than `--max-chars` is cut. Then `truncated` is `true`. The full output is in `log_file`.
 5. `log_file` holds the raw `stdout` and `stderr` of the target. Write it under the OS temporary directory, in `harness-dispatch/`.
 6. `error` is `null` or `{ "code": "...", "message": "..." }`. Do not put an account email or raw authentication text in the envelope.
+7. `denied_actions` is an array of strings such as `"command: Bash"`: the actions that the target denied during the run. It is `[]` when there are none, and for each target that does not report them. A run with an answer and a denied action is still `ok`. A run with no answer and a denied action is `permission-denied`.
+8. `exit_code` is the exit code of `hd`, from the table in section 4. The raw exit code of the target is in `log_file`.
 
 ## 6. Adapter interface
 
@@ -127,8 +137,9 @@ export default {
   id, name, cli,                      // "codex", "OpenAI Codex CLI", "codex"
   capabilities: { resume, schema, models, efforts: [...] },
   resolve(env),                       // -> { command, prefixArgs } with an absolute command, or undefined
+  candidates(env),                    // optional: every { command, prefixArgs, via }. diagnose() takes the highest version.
   buildInvocation(request, ctx),      // -> { args, stdin, tempFiles }   pure, no I/O except ctx.tempFile()
-  parseOutput(result, ctx),           // -> { ok, text, session_id, usage, structured, cost_usd, model, error }  pure
+  parseOutput(result, ctx),           // -> { ok, text, session_id, usage, structured, cost_usd, model, denied_actions, error }  pure
   authCheck: { args, parse },         // optional, no model call
   listModels: { args, parse },        // optional
 };
@@ -155,14 +166,14 @@ All flags below come from the `--help` text of the installed versions, read on 2
 
 Output: one JSON object. Expected fields (not verified by a live run today): `result`, `is_error`, `session_id`, `usage`, `total_cost_usd`.
 
-### 7.2 OpenAI Codex (`codex` 0.154.0)
+### 7.2 OpenAI Codex (`codex` 0.154.0 and 0.167.0-alpha.4.1)
 
 | Request | Arguments |
 |---|---|
 | Base | `exec --json --skip-git-repo-check -o <temp file>` |
 | Prompt | `-` as the prompt argument, text on `stdin` |
 | `--model` | `-m <id>` |
-| `--effort` | `-c model_reasoning_effort="<level>"` |
+| `--effort` | `-c model_reasoning_effort="<level>"`. All five levels (`low`, `medium`, `high`, `xhigh`, `max`) are passed on. The service decides what a model accepts. |
 | `--access read` | `-c sandbox_mode="read-only"` |
 | `--access write` | `-c sandbox_mode="workspace-write"` |
 | `--resume` | `exec resume <session_id> -` with the same options. `resume` has no `-s` and no `-C` flag. |
@@ -171,23 +182,40 @@ Output: one JSON object. Expected fields (not verified by a live run today): `re
 
 Output: JSON Lines. Take the final answer from the `-o` file. Take the session id and usage from the events. Expected event names (not verified today): `thread.started` with `thread_id`, `item.completed` with `item.type` `agent_message`, `turn.completed` with `usage`, `error`, `turn.failed`.
 
-Windows: npm installs `codex` as a shim. Resolve it in this order: a real `codex.exe` on `PATH`; else read `codex.cmd` on `PATH`, find the `.js` entry that it names, and start `process.execPath` with that file. This order uses the official launcher and needs no copy.
+Failure events were confirmed by live runs (2026-11-20): `error` and `turn.failed` carry the message (a JSON document, or text), and `item.completed` with `item.type` `error` is a warning. A usage limit arrives as `error` and `turn.failed` with the text "You've hit your usage limit ... try again at 12:10 PM". It maps to `usage-limit`. The success events are still not confirmed by a live run.
 
-### 7.3 Google Antigravity (`agy` 1.5.12)
+Choice of the program. One machine can hold several copies of `codex`, with different versions. The service can refuse a model for an old copy (live evidence: 0.154.0 refused `gpt-6.2-astra` and `gpt-5.5` for a ChatGPT account; the Codex Desktop copy 0.167.0-alpha.4.1 accepted the model). So `resolve` collects all candidates and takes the highest version:
+
+1. The override `HARNESS_DISPATCH_CODEX_PATH`, when set. It ends the search.
+2. Each real `codex.exe` on `PATH`; the entry file of each npm `codex.cmd` shim on `PATH` (start `process.execPath` with that file: the official launcher, no copy needed); the folders `~/.local/bin` and `%LOCALAPPDATA%\Programs\codex`; and, on Windows, `%LOCALAPPDATA%\OpenAI\Codex\bin\*\codex.exe` (the Codex Desktop app).
+3. Each candidate runs `--version` one time for each process. The numbers are compared as numbers. A pre-release is lower than the same release (`0.167.0-alpha.4.1` is lower than `0.167.0`, and higher than `0.154.0`). A candidate that cannot answer is skipped. A tie goes to the candidate that comes first in the list above.
+4. With one candidate, no probe runs in `dispatch`. `hd list` shows the selected path (`executable`), how it was found (`via`) and its `version`.
+
+Other targets use the same override and a one-candidate list.
+
+### 7.3 Google Antigravity (`agy` 1.5.13)
 
 | Request | Arguments |
 |---|---|
 | Base | `-p <prompt> --output-format json --print-timeout <seconds>s` |
 | Prompt | Argument of `-p`. If the prompt is longer than 24,000 characters, stop with `prompt-too-long`. |
 | `--model`, `--effort` | `--model <slug>`, `--effort <level>` |
-| `--access read` | `--mode plan` |
+| `--access read` | `--mode plan --sandbox` |
 | `--access write` | `--mode accept-edits` |
 | `--resume` | `--conversation <id>` |
 | `--schema` | `--json-schema <path>` |
 | `--cwd` | Process working directory |
 | Models | `agy models` prints `<slug><TAB><label>` lines after one status line |
 
-Output: one JSON object with `conversation_id`, `status`, `response`, `error`, `duration_seconds`, `num_turns`, `structured_output`, `usage` (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`). The run is good only when the exit code is 0 and `status` is `SUCCESS`. Exit code 1 is a general failure or an unknown model.
+Read access. Live evidence (2026-11-20): `--mode plan` alone is advice to the model. A forceful prompt made `agy` run `npm test` (an allow rule approved it), and the command wrote a file. `--sandbox` stops the write at the OS level and still lets read-only commands run. So read access is `--mode plan --sandbox`. Write access is `--mode accept-edits` with no `--sandbox`. Also: `--mode plan` puts `/plan ` in front of the prompt that the model sees.
+
+Output: one JSON object with `conversation_id`, `status`, `response`, `error`, `duration_seconds`, `num_turns`, `structured_output`, `usage` (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens`), and `denied_actions` (array of `{ action, display_name }`). The run is good only when the exit code is 0 and `status` is `SUCCESS`. Exit code 1 is a general failure or an unknown model.
+
+Denied actions. In headless mode `agy` cannot ask for a permission. It denies the tool call, prints `denied_actions`, and a line on `stderr` that names the missing permission. The run can still have `status` `SUCCESS` and an empty `response`. When `response` is empty and `denied_actions` is not empty, `hd` reports `ok` false, `error.code` `permission-denied` (exit 1), and a message that names the denied actions and says that the operator can add an allow rule under `permissions.allow` in the `agy` settings. The message does not repeat the bypass flag that the `stderr` text suggests. `denied_actions` of the envelope holds one string for each record, such as `"command: Bash"`.
+
+A caller that runs `hd` itself under `agy` needs an allow rule for `node` (`command(node)`), or the shell call is denied.
+
+Live checks (2026-11-20): `-p <prompt>`, `--conversation`, `--json-schema` (fills `structured_output`) and `--mode accept-edits` (writes a file) all work.
 
 `agy` is a real executable at `%LOCALAPPDATA%\agy\bin\agy.exe`. A shell that started before the install does not have it on `PATH`. Check that location when `PATH` does not have it.
 
@@ -261,6 +289,6 @@ Done means: `npm test` passes, `npm run build:dist` leaves no difference in the 
 ## 13. Not verified, and gates
 
 1. The JSON field names of `claude` and `codex` output in sections 7.1 and 7.2 come from memory and from the existing code. A live probe must confirm them. A live probe uses model quota, so the operator must approve it.
-2. The meaning of `--mode plan` in `agy` and of `--permission-mode manual` in `claude` for a read-only task is taken from the help text only.
+2. The meaning of `--permission-mode manual` in `claude` and of `-c sandbox_mode="read-only"` in `codex` for a read-only task is taken from the help text only. For `agy`, `--mode plan` alone was shown NOT to enforce read access (section 7.3); `--mode plan --sandbox` is the mapping.
 3. `hd doctor` authentication checks for `agy`: no status command is known. Report `unknown` if there is none.
 4. Gates for every session: a live dispatch, an installer run with `--apply`, `git push`, a release, and a message to an external party.
