@@ -109,7 +109,11 @@ Exit codes: 0 done. 1 the target failed (`target-error`, `timeout`, `bad-output`
 - A dispatched agent cannot dispatch again. The variable `HARNESS_DISPATCH_DEPTH` stops loops. Do not change it.
 - A harness whose shell needs an allow rule cannot run `hd` in headless mode without it. Antigravity needs
   `command(node)` under `permissions.allow` in its settings. Without it the call is denied.
-  Claude Code CLI needs a `Bash(node:*)` rule. Codex as the caller did not work in its default Windows sandbox.
+  Claude Code CLI needs a `Bash(node:*)` rule.
+- In Codex Desktop and CLI on Windows, qualify the launcher with the absolute skill path. The child CLI may need to write to its own home directory.
+  If the sandbox blocks the launch or those writes, request approval for that exact `node .../scripts/hd.mjs` command.
+  In Codex tool calls, use `sandbox_permissions: "require_escalated"` with a short justification. Keep the target's requested `--access`.
+  If the session cannot request approval, report the restriction and show the exact command for the operator to run.
 - Check the result yourself. A dispatched answer is a report, not a proof. Run the test that the brief names.
 - After a failure, do not send the same task more than one more time. Read `error` and `log_file` first.
 - A dispatch can take minutes. Set `--timeout` for the task.

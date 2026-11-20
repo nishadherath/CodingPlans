@@ -80,7 +80,7 @@ The skill is a Node script. The shell of the calling harness must be allowed to 
 | Antigravity | The allow rule `command(node)` under `permissions.allow` in its settings. |
 | Claude Code CLI | The allow rule `Bash(node:*)`. |
 | Claude Code desktop | Proved to run the script. |
-| Codex | Failed in its default Windows sandbox: the sandbox refused to start `node.exe`. |
+| Codex (Desktop and CLI) | No rule to add. The Codex sandbox on Windows can block the launcher, and it blocks the writes of the target CLI in its own home folder. Codex asks you to approve the exact `node <skill folder>/scripts/hd.mjs` command. Approve that command. The operator tested this by hand on 2026-11-20. In a headless `codex exec` run nobody can approve, and Codex refuses `hd run`. |
 
 These rules belong to you. The skill does not add them.
 

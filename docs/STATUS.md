@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20, release 0.2.1 and first install, by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-20, release 0.2.2 (Codex as the caller), by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -12,13 +12,13 @@ The skill must **not** be installed until the operator says so.
 
 ## Current state
 
-Release `0.2.1` is on `main` with the tag `v0.2.1`. It has the same behaviour as `0.2.0`; only the version number changed. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, documented, and **installed on the operator's machine**.
+Release `0.2.2` is on `main` with the tag `v0.2.2`. The script has the same behaviour as in `0.2.0`. Version `0.2.2` adds the operator's rule for Codex as the caller to `SKILL.md`. The skill `harness-dispatch` is built, reviewed, verified by live runs on all three targets, documented, and **installed on the operator's machine**.
 
-Install record (2026-11-20, on the operator's instruction, `node scripts/install-skill.mjs --apply`):
+Install record (2026-11-20, on the operator's instruction, `node scripts/install-skill.mjs --apply`; installed again at version 0.2.2 the same day):
 
 | Harness | Skill folder | Check |
 |---|---|---|
-| Claude Code | `~/.claude/skills/harness-dispatch` | Files identical to the repository, `hd --version` gives 0.2.1 |
+| Claude Code | `~/.claude/skills/harness-dispatch` | Files identical to the repository, `hd --version` gives 0.2.2 |
 | Codex | `~/.codex/skills/harness-dispatch` | Same |
 | Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same |
 | OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same |
@@ -45,7 +45,7 @@ Known limits (stated in `docs/safety.md`):
 
 - Codex read runs keep the built-in web tool.
 - Antigravity read runs: MCP and browser tools were not tested.
-- Codex as the caller failed: its Windows sandbox refused to start `node.exe`.
+- Codex as the caller works when a person approves the launcher command (tested by hand by the operator, 2026-11-20). In a headless `codex exec` run, Codex refused `hd run` (hub test, 2026-11-20).
 - ZCode, OpenCode and Cline as the caller: not tested.
 - D6 and D7 (POSIX only): open.
 - The part 3 code (Codex read hardening) was reviewed by the hub, not by the H2 session.
@@ -64,7 +64,7 @@ Measured cost of the whole project (API list price, table `2026-11-20`, `session
 
 Total: 47.28 USD. The hub is 64 percent.
 
-Next work, none approved: the allow rules for callers (operator); a check that each harness loads the skill; the Codex web tool in read mode; Codex as the caller; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
+Next work, none approved: the allow rules for callers (operator); a check that each harness loads the skill; the Codex web tool in read mode; POSIX defects D6 and D7; the targets ZCode, OpenCode and Cline; the deferred Cline provider repair.
 
 ## Completed
 

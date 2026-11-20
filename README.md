@@ -109,7 +109,7 @@ Proof state on 2026-11-20. All live runs were on Windows 11.
 | Caller | Claude Code desktop | Proved. |
 | Caller | Claude Code CLI | Proved. It needs the allow rule `Bash(node:*)`. |
 | Caller | Antigravity | Proved. It needs the allow rule `command(node)`. |
-| Caller | Codex | **Failed.** Its Windows sandbox refused to start `node.exe`. |
+| Caller | Codex (Desktop and CLI) | Works when a person approves the launcher. Codex asks for approval of the exact `node .../scripts/hd.mjs` command, because that command must run outside the Codex sandbox. The operator tested this by hand on 2026-11-20. A headless `codex exec` run has nobody to approve: there, `hd list` and `hd doctor` run, and Codex refuses `hd run`. |
 | Caller | ZCode, OpenCode, Cline | Not tested. The installer has folders for ZCode and OpenCode. It has none for Cline. |
 
 ## Known limits

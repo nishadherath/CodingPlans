@@ -47,6 +47,7 @@ Live runs created a file on each target in write mode.
 - Codex read runs keep the built-in web tool. A hostile prompt could use it to send data out. No flag for it was tested.
 - Antigravity read runs: the deny rule covers shell commands only. MCP and browser tools were not tested.
 - Claude Code in write mode refuses each shell command that needs approval.
+- Codex as the caller runs the launcher outside the Codex sandbox, after your approval. The target then has the access that `--access` gives. The Codex sandbox does not limit it.
 - Codex read runs fail closed. `hd` lists the MCP servers first, with no model call. If the list fails, the run does not start.
 - Only Windows 11 was tested. On POSIX two defects are open. The first: when the caller stops `hd`, the target can keep running (D6). The second: the log folder is shared between users (D7). The details are in `docs/handoffs/2026-11-20-h2-result.md`.
 - The Codex CLI must be recent. Version 0.154.0 was rejected by the service for the models that were tried. `hd` selects the newest `codex` program that it finds, including the one inside Codex Desktop.
@@ -60,7 +61,7 @@ Do not put secrets in a prompt. The target keeps its own session history.
 
 ## What the skill never does
 
-- It never passes a bypass flag: not `--dangerously-skip-permissions`, not `--dangerously-bypass-approvals-and-sandbox`, not `bypassPermissions`. Version 0.2.1 has no option that removes all permission checks.
+- It never passes a bypass flag: not `--dangerously-skip-permissions`, not `--dangerously-bypass-approvals-and-sandbox`, not `bypassPermissions`. Version 0.2.2 has no option that removes all permission checks.
 - It never uses a shell. It starts each target with an argument list and an absolute path.
 - It never fixes a model id in code. `--model` goes to the target unchanged.
 - It never signs in for you. If a target is not signed in, `hd` reports it.

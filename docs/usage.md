@@ -26,7 +26,7 @@ node <skill folder>/scripts/hd.mjs <command> ...                  # the installe
 | `hd doctor [--to <id>]` | Installed, startable, signed in. | No |
 | `hd models --to <id>` | Model ids. Only Antigravity can list them. For the others the result says so. | No |
 | `hd help` | Print the help. | No |
-| `hd --version` | Print the version (`0.2.1`). | No |
+| `hd --version` | Print the version (`0.2.2`). | No |
 
 Target ids: `claude`, `codex`, `antigravity`.
 

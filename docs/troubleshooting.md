@@ -45,7 +45,7 @@ Symptom: the calling agent says that the shell command was denied or refused, an
 
 - Antigravity: add the allow rule `command(node)` under `permissions.allow` in its settings.
 - Claude Code CLI: add the allow rule `Bash(node:*)`.
-- Codex as the caller: this failed in the default Windows sandbox, which refused to start `node.exe`. No working setting is known.
+- Codex as the caller: Codex asks for approval of the exact `node <skill folder>/scripts/hd.mjs` command, because the command must run outside the Codex sandbox. Approve it, and the dispatch works (tested by hand by the operator, 2026-11-20). If you see "This action was rejected due to unacceptable risk", the session had nobody to approve the command, for example a headless `codex exec` run. Run the command that Codex shows you in your own terminal, or use an interactive Codex session.
 
 See [install](install.md).
 
