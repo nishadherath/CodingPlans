@@ -22,11 +22,30 @@
 // known names of the usage fields.
 
 import { DispatchError } from "../envelope.mjs";
-import { failureCode, parseJsonLines, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
+import { failureCode, parseJsonLines, parseJsonLoose, pickNumber, pickString, tailText, unwrapMessage } from "../parse.mjs";
 import { EFFORTS } from "../request.mjs";
 import { codexCandidates, resolveNamed } from "../resolve.mjs";
 
 const SANDBOX = { read: "read-only", write: "workspace-write" };
+
+// Read hardening (live evidence, H3 part 3, 2026-11-20). The sandbox covers shell
+// commands and file writes only. Plugins, connected apps, computer-use, browser
+// features, hooks and the MCP servers of the user config give the agent tools
+// that act outside the sandbox. With these features off and every enabled server
+// switched off, a read run saw none of those tools. The built-in web tool stays.
+// A write run keeps the plugins and the servers of the user.
+const READ_OFF_FEATURES = ["plugins", "apps", "computer_use", "browser_use", "browser_use_external", "in_app_browser", "hooks"];
+// The servers are listed with plugins and apps off, as in the real run: those two
+// features add servers (for example the computer-use server) that the run never sees.
+const LIST_ARGS = ["mcp", "list", "--json", "--disable", "plugins", "--disable", "apps"];
+const LIST_TIMEOUT_MS = 20_000;
+
+const UNLISTED = "The MCP servers could not be listed, so the read run did not start. A read run with unknown servers is not a read run.";
+
+/** A TOML key for `-c mcp_servers.<key>.enabled=false`: quoted when it has an unusual character. */
+function tomlKey(name) {
+	return /^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name);
+}
 
 const adapter = {
 	id: "codex",
@@ -48,9 +67,35 @@ const adapter = {
 		return codexCandidates(env);
 	},
 
+	/**
+	 * Before a read run: list the MCP servers (no model call). Each enabled one is
+	 * switched off in `buildInvocation`. Fail closed: if the list is missing or
+	 * unreadable, the run does not start. A write run needs nothing here.
+	 */
+	async prepare(request, { command, prefixArgs, exec }) {
+		if (request.access !== "read") return {};
+		const result = await exec(command, [...prefixArgs, ...LIST_ARGS], { cwd: request.cwd, timeoutMs: LIST_TIMEOUT_MS, killTree: true });
+		if (result.spawnError || result.timedOut || result.code !== 0) {
+			throw new DispatchError("target-error", `${UNLISTED} The list command failed with code ${result.code ?? "none"}.`);
+		}
+		const list = parseJsonLoose(result.stdout);
+		if (!Array.isArray(list)) throw new DispatchError("target-error", `${UNLISTED} The output was not a JSON array.`);
+		const mcpServers = [];
+		for (const server of list) {
+			if (typeof server?.name !== "string" || server.name === "") {
+				throw new DispatchError("target-error", `${UNLISTED} A server in the list has no name.`);
+			}
+			if (server.enabled !== false) mcpServers.push(server.name);
+		}
+		return { mcpServers };
+	},
+
 	buildInvocation(request, ctx) {
 		const sandbox = SANDBOX[request.access];
 		if (!sandbox) throw new DispatchError("usage", `Unknown access mode "${request.access}".`);
+		const reading = request.access === "read";
+		// Pure functions must not guess: a read run without the list is refused here too.
+		if (reading && !Array.isArray(ctx.mcpServers)) throw new DispatchError("target-error", UNLISTED);
 		const lastMessage = ctx.tempFile("last-message.txt");
 		const resuming = Boolean(request.resume);
 
@@ -65,6 +110,10 @@ const adapter = {
 		// was refused. Nobody can answer an approval in headless mode, so "never"
 		// is also right for write access. `-c` exists for `exec resume` too.
 		args.push("-c", `approval_policy="never"`);
+		if (reading) {
+			for (const feature of READ_OFF_FEATURES) args.push("--disable", feature);
+			for (const name of ctx.mcpServers) args.push("-c", `mcp_servers.${tomlKey(name)}.enabled=false`);
+		}
 		if (request.schema) args.push("--output-schema", request.schema.path);
 		if (resuming) args.push(request.resume);
 		args.push("-");

@@ -217,6 +217,10 @@ export async function diagnose(adapter, env = process.env, { exec, versionCache 
 	const variable = overrideName(adapter);
 	const override = env[variable];
 	if (typeof override === "string" && override !== "") {
+		// A common PowerShell mistake: the quotes stay in the value.
+		if (/^(["']).*\1$/s.test(override)) {
+			return { state: "usage", message: `${variable} starts and ends with a quote character. Remove the quotes: give the bare absolute path.` };
+		}
 		if (!isAbsolute(override)) {
 			return { state: "usage", message: `${variable} must be an absolute path. Got a relative path.` };
 		}

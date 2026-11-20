@@ -33,7 +33,8 @@ export function makeRequest(overrides = {}) {
 
 /** An adapter context with a fixed temp path, so that the tests can compare. */
 export function makeCtx(overrides = {}) {
-	return { env: {}, tempFile: (name) => `TMP/${name}`, ...overrides };
+	// `mcpServers` is what the Codex read run needs from `prepare`: the enabled MCP servers.
+	return { env: {}, tempFile: (name) => `TMP/${name}`, mcpServers: [], ...overrides };
 }
 
 /** The result shape of `execute`. */

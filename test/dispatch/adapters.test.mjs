@@ -95,28 +95,30 @@ test("claude authCheck reads only loggedIn", () => {
 // ----------------------------------------------------------------- codex
 
 const CODEX_NEW = ["exec", "--json", "--skip-git-repo-check", "-o", "TMP/last-message.txt"];
+// Read runs only (H3 part 3): features that carry tools outside the sandbox are off.
+const HARDEN = ["plugins", "apps", "computer_use", "browser_use", "browser_use_external", "in_app_browser", "hooks"].flatMap((feature) => ["--disable", feature]);
 
 const codexTable = [
 	[
 		"read-only default",
 		{ cwd: "/work" },
-		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "-"],
+		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', ...HARDEN, "-"],
 	],
 	["write", { cwd: "/work", access: "write" }, [...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="workspace-write"', "-c", 'approval_policy="never"', "-"]],
 	[
 		"model and effort",
 		{ cwd: "/work", model: "gpt-x", effort: "xhigh" },
-		[...CODEX_NEW, "-C", "/work", "-m", "gpt-x", "-c", 'model_reasoning_effort="xhigh"', "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "-"],
+		[...CODEX_NEW, "-C", "/work", "-m", "gpt-x", "-c", 'model_reasoning_effort="xhigh"', "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', ...HARDEN, "-"],
 	],
 	[
 		"schema",
 		{ cwd: "/work", schema },
-		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "--output-schema", "/abs/schema.json", "-"],
+		[...CODEX_NEW, "-C", "/work", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', ...HARDEN, "--output-schema", "/abs/schema.json", "-"],
 	],
 	[
 		"resume has no -C and puts the id before the prompt marker",
 		{ cwd: "/work", resume: "sess-1", model: "gpt-x" },
-		["exec", "resume", "--json", "--skip-git-repo-check", "-o", "TMP/last-message.txt", "-m", "gpt-x", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', "sess-1", "-"],
+		["exec", "resume", "--json", "--skip-git-repo-check", "-o", "TMP/last-message.txt", "-m", "gpt-x", "-c", 'sandbox_mode="read-only"', "-c", 'approval_policy="never"', ...HARDEN, "sess-1", "-"],
 	],
 ];
 

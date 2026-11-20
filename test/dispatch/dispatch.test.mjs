@@ -278,6 +278,7 @@ test("codex: the -o temp file is read, then deleted", async () => {
 	const box = sandbox();
 	try {
 		const exec = fakeExec((command, args) => {
+			if (args[0] === "mcp") return makeResult({ stdout: "[]" }); // the server list of a read run
 			const out = args[args.indexOf("-o") + 1];
 			writeFileSync(out, "Answer from the file\n");
 			return makeResult({ stdout: fixture("codex", "synthetic-events.jsonl") });
@@ -286,7 +287,8 @@ test("codex: the -o temp file is read, then deleted", async () => {
 		assert.equal(envelope.ok, true);
 		assert.equal(envelope.text, "Answer from the file");
 		assert.equal(envelope.session_id, "0199a213-81c0-7800-8aa1-bbab2a035a53");
-		const out = exec.calls[0].args[exec.calls[0].args.indexOf("-o") + 1];
+		const run = exec.calls.find((call) => call.args[0] === "exec");
+		const out = run.args[run.args.indexOf("-o") + 1];
 		assert.equal(existsSync(out), false, "temp file deleted");
 		const leftovers = readdirSync(join(box.tmpRoot, "harness-dispatch")).filter((name) => name.startsWith("run-"));
 		assert.deepEqual(leftovers, [], "temp folder deleted");

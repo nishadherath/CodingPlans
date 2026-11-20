@@ -113,6 +113,11 @@ export async function dispatch(request, overrides = {}) {
 	try {
 		let invocation;
 		try {
+			// An adapter can need a no-model call first (Codex read: the MCP server list).
+			// Its result goes into `ctx`, so that `buildInvocation` stays pure.
+			if (adapter.prepare) {
+				Object.assign(ctx, await adapter.prepare(request, { command: found.command, prefixArgs: found.prefixArgs, exec: deps.exec }));
+			}
 			invocation = adapter.buildInvocation(request, ctx);
 		} catch (error) {
 			if (error instanceof DispatchError) return fail(error.code, error.message);
