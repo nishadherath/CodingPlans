@@ -10,3 +10,6 @@ node_modules/
 # Local index cache of the graft code-search tool. Not a project artefact.
 graft/
 .ignore
+
+# Scratch workspaces of live dispatch tests.
+.hd-live/
