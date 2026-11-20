@@ -110,7 +110,7 @@ Proof state on 2026-11-20. All live runs were on Windows 11.
 | Caller | Claude Code CLI | Proved. It needs the allow rule `Bash(node:*)`. |
 | Caller | Antigravity | Proved. It needs the allow rule `command(node)`. |
 | Caller | Codex (Desktop and CLI) | Works when a person approves the launcher. Codex asks for approval of the exact `node .../scripts/hd.mjs` command, because that command must run outside the Codex sandbox. The operator tested this by hand on 2026-11-20. A headless `codex exec` run has nobody to approve: there, `hd list` and `hd doctor` run, and Codex refuses `hd run`. |
-| Caller | ZCode, OpenCode, Cline | Not tested. The installer has folders for ZCode and OpenCode. It has none for Cline. |
+| Caller | ZCode, OpenCode, Cline, DeepSeek Harness | Not tested as callers. ZCode lists the installed skill. Cline and DeepSeek Harness read the shared folder `~/.agents/skills`, so they need no folder of their own. The record is in [docs/STATUS.md](docs/STATUS.md). |
 
 On 2026-11-20 the skill was installed in six harness folders on the operator's machine. Each of the three targets then answered a test dispatch through an installed copy. The record is in [docs/STATUS.md](docs/STATUS.md).
 

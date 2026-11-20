@@ -67,9 +67,18 @@ The path is relative to your home folder.
 | `opencode` | `.config/opencode/skill/harness-dispatch` |
 | `zcode` | `.zcode/skills/harness-dispatch` |
 | `agents` | `.agents/skills/harness-dispatch` |
-| `cline` | Not supported. No skill folder is known. |
+| `cline` | The installer has no folder for this target. Cline reads `.agents/skills`, so the target `agents` serves Cline. |
 
-The folders were seen on the operator's machine on 2026-11-20. The skill was run as a caller in Claude Code (desktop and CLI) and in Antigravity only. For the other harnesses the installer has a folder, and nothing more is proved.
+The folders were seen on the operator's machine on 2026-11-20. The skill was run as a caller in Claude Code (desktop and CLI) and in Antigravity only.
+
+A check of the program code on 2026-11-20 gave these results. No model was called.
+
+- Cline (CLI 3.0.65) reads `.cline/skills` and `.agents/skills`.
+- DeepSeek Harness reads `.dsh/skills` and `.agents/skills`. The installer has no target for it. The target `agents` serves it.
+- ZCode and OpenCode read their own folder and `.agents/skills`. With the targets `zcode`, `opencode` and `agents` installed, each of them finds the skill two times. ZCode lists the skill two times. OpenCode writes a warning and uses one copy. The copies are identical, so this does no harm.
+- Antigravity reads `.gemini/config/skills`.
+
+Only ZCode was seen to list the skill. The record is in [STATUS.md](STATUS.md).
 
 ## Let the caller run `node`
 

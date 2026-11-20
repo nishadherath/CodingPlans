@@ -92,6 +92,27 @@ Report in five lines: what you tried, what failed, the exact error, what you nee
 
 Read `AGENTS.md` section 8 for the project facts, then do the work above. The hub checks each row, asks the operator about the live checks, and writes the results to `docs/STATUS.md`.
 
+## Result (hub, 2026-11-20)
+
+The sub-agent made no model call and changed no file. The hub ran each check command below, and each one gave the stated result.
+
+| Harness | Folders that the harness reads for user skills | Copy that it finds | Level | Source |
+|---|---|---|---|---|
+| ZCode (CLI 0.17.1 inside the desktop app) | `~/.zcode/skills`, `~/.agents/skills` | Both | A, observed | `node zcode.cjs skills list` in `%LOCALAPPDATA%\Programs\ZCode\resources\glm` prints `- harness-dispatch (user/zcode)` and `- harness-dispatch (user/agents)`, each with the path of its `SKILL.md`. The desktop app has the same root functions in `app.asar` (level B for the desktop app). |
+| Antigravity (`agy` 1.5.13) | `~/.gemini/config/skills` | `~/.gemini/config/skills/harness-dispatch` | B, expected | The string `~/.gemini/config/skills/<name>/` is in `agy.exe` three times. The program names `.agents/skills` only for a workspace. Only the interactive command `/skills` lists skills. |
+| Cline (CLI 3.0.65) | `~/.cline/skills`, `~/.agents/skills` | `~/.agents/skills/harness-dispatch` | B, expected | `@cline/shared/dist/storage/index.js`: `function _E(C){return R([...CE(C),_(L(),g),_(A,z,g)])}` with `g="skills"` and `z=".agents"`. `cline config` needs a terminal, so no list was possible. |
+| DeepSeek Harness (`dsh` 0.1.5-rc.1) | `~/.dsh/skills`, `~/.agents/skills` | `~/.agents/skills/harness-dispatch` | B, expected | Package `@deepseek-ai/dsh-skill-filesystem`: `README.md`, section "Roots and priority" (rank 500, `user-agents`), and `lib/index.js` (`join(homedir(), ".agents")`). The `web` profile has the plugin off. The desktop app mounts it for each agent preset. |
+| OpenCode (desktop app) | `~/.config/opencode/skill` or `skills`, `~/.claude/skills`, `~/.agents/skills` | All three | B, expected | `app.asar`: `OPENCODE_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"` and `EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"`. The log `~/.local/share/opencode/log/opencode.log` shows that the app read `~/.config/opencode/skill` on 2026-10-30. The app did not run after the install, so the log does not name `harness-dispatch`. |
+
+Defects and facts for the operator:
+
+- ZCode and OpenCode find the skill two times, because they also read the shared agents folder. The copies are identical.
+- Cline and DeepSeek Harness need no installer target. The installer reports `cline` as not supported, and that message is now wrong.
+- No proof without a model call exists for Antigravity, Cline and DeepSeek Harness. For OpenCode, one start of the desktop app writes a log that can give the proof.
+- `dsh --profile web --help` printed nothing in 60 seconds and was stopped. Do not use it as a help command. No `dsh` process was left.
+
+Measured cost of the sub-agent: 61 calls, 1.18 USD (`session-cost.mjs`, table `2026-11-20`). The projection was 30 calls and 1.70 USD or less.
+
 ## Session dispatch decision
 
 Run because the operator asked for it and the hub session was summarised once.
