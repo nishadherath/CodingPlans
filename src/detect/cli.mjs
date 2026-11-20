@@ -278,5 +278,3 @@ export async function canExecute(executable, timeoutMs = 20_000) {
 		};
 	}
 }
-
-// MARKER_SPLIT_DETECT_CLI

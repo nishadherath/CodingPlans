@@ -7,7 +7,7 @@
 import { redact } from "./parse.mjs";
 
 export const SCHEMA = "harness-dispatch/1";
-export const VERSION = "1.0.0";
+export const VERSION = "0.2.0";
 
 /** Process exit code for each `error.code`. */
 const EXIT_CODES = {

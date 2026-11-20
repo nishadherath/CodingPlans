@@ -586,8 +586,6 @@ async function canExecute(executable, timeoutMs = 20_000) {
 		};
 	}
 }
-
-// MARKER_SPLIT_DETECT_CLI
 return { findSpawnableOnPath, findAllOnPath, findInUserDirs, findVendorBinary, probeVersion, detectCli, canExecute };
 })();
 

@@ -1,6 +1,7 @@
 {
-  "name": "cline-coding-plans",
-  "version": "0.1.0",
+  "name": "harness-dispatch",
+  "version": "0.2.0",
+  "private": true,
   "description": "harness-dispatch: a portable skill that sends a task from one coding agent CLI to another (Claude Code, OpenAI Codex, Google Antigravity) and returns one JSON result. Also holds the legacy Cline provider repair tool.",
   "license": "Apache-2.0",
   "type": "module",
@@ -21,6 +22,8 @@
     "skill",
     "scripts/install-skill.mjs",
     "README.md",
+    "CHANGELOG.md",
+    "docs",
     "LICENSE"
   ],
   "scripts": {
@@ -28,14 +31,20 @@
     "check:bundles": "node scripts/build-dist.mjs --check",
     "test:live": "node --test --test-concurrency=1 test/live.test.mjs",
     "build:dist": "node scripts/build-dist.mjs",
+    "hd": "node bin/harness-dispatch.mjs",
     "doctor": "node bin/coding-plans.mjs doctor"
   },
   "keywords": [
-    "cline",
+    "harness-dispatch",
+    "skill",
+    "agent-skill",
+    "coding-agent",
     "claude-code",
-    "openai-codex",
-    "provider",
-    "setup",
-    "diagnostics"
+    "codex",
+    "antigravity",
+    "dispatch",
+    "cli",
+    "cline",
+    "legacy"
   ]
 }

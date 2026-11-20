@@ -201,7 +201,7 @@ __ns_src_dispatch_envelope_mjs = (() => {
 const { redact } = __ns_src_dispatch_parse_mjs;
 
 const SCHEMA = "harness-dispatch/1";
-const VERSION = "1.0.0";
+const VERSION = "0.2.0";
 
 /** Process exit code for each `error.code`. */
 const EXIT_CODES = {
@@ -1013,8 +1013,6 @@ async function canExecute(executable, timeoutMs = 20_000) {
 		};
 	}
 }
-
-// MARKER_SPLIT_DETECT_CLI
 return { findSpawnableOnPath, findAllOnPath, findInUserDirs, findVendorBinary, probeVersion, detectCli, canExecute };
 })();
 
