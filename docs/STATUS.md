@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-20, after the skill loading check (stage H5), by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-21, after the live checks of the skill loading check (stage H5), by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -25,14 +25,14 @@ The operator approved the install on 2026-11-20. The command was `node scripts/i
 |---|---|---|---|
 | Claude Code | `~/.claude/skills/harness-dispatch` | Identical to the repository, version 0.2.2 | Yes. Claude Code desktop lists the skill and used it for the test dispatches. |
 | Codex | `~/.codex/skills/harness-dispatch` | Same | Yes. A headless `codex exec` run read the skill and followed it. |
-| Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same | Expected, not observed. The `agy` program names this folder as its global skill folder. No command lists the skills without a model call. |
-| OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same | Expected, not observed. The program code reads this folder and the shared agents folder. The app last ran on 2026-10-30, before the install. |
+| Antigravity | `~/.gemini/config/skills/harness-dispatch` | Same | Yes. On 2026-11-21 an `agy` session listed its skills, and the list names `harness-dispatch`. The list has no skill that is only in the shared agents folder, so Antigravity does not read that folder. |
+| OpenCode | `~/.config/opencode/skill/harness-dispatch` | Same | Expected, not observed. The program code reads this folder and the shared agents folder. On 2026-11-21 the desktop app (version 1.19.5) was started one time. It wrote no line about skills, and its local server refuses a request without a password. |
 | ZCode | `~/.zcode/skills/harness-dispatch` | Same | Yes. The command-line program inside the desktop app (version 0.17.1) lists the skill. It lists the skill two times: from this folder and from the shared agents folder. |
 | Shared agents folder | `~/.agents/skills/harness-dispatch` | Same | ZCode, OpenCode, Cline and DeepSeek Harness read this folder. |
-| Cline | No folder of its own | It uses the copy in the shared agents folder | Expected, not observed. The code of Cline CLI 3.0.65 reads `~/.cline/skills` and `~/.agents/skills`. |
+| Cline | No folder of its own | It uses the copy in the shared agents folder | Yes. On 2026-11-21 a headless Cline session (CLI 3.0.65, plan mode) listed 51 skills, and the list names `harness-dispatch`. |
 | DeepSeek Harness | No folder of its own | It uses the copy in the shared agents folder | Expected, not observed. Its skill plugin reads `~/.dsh/skills` and `~/.agents/skills`. The `web` profile has this plugin off. The desktop app enables it for each agent preset. |
 
-"Expected, not observed" means: the code of the harness reads a folder that holds the skill, and no output of the harness names the skill yet. Stage H5 made no model call. The sources and the check commands are in [handoffs/2026-11-20-h5-skill-loading-check.md](handoffs/2026-11-20-h5-skill-loading-check.md).
+"Expected, not observed" means: the code of the harness reads a folder that holds the skill, and no output of the harness names the skill yet. The discovery in stage H5 made no model call. The operator then approved one model call in Antigravity, one in Cline, and one start of the OpenCode app. The sources and the check commands are in [handoffs/2026-11-20-h5-skill-loading-check.md](handoffs/2026-11-20-h5-skill-loading-check.md).
 
 The installed copies do not follow the repository. Run the installer again after each change to `skill/harness-dispatch/`.
 
@@ -83,7 +83,7 @@ None of this work is approved.
 | Item | Needs |
 |---|---|
 | Allow rules for `node` in Antigravity and in the Claude Code CLI | The operator: it changes permission settings |
-| Observed proof that Antigravity, Cline, OpenCode and DeepSeek Harness load the skill | One small model call in each harness, or one start of the desktop app. The operator approves each one. |
+| Observed proof that OpenCode and DeepSeek Harness load the skill | One question in each desktop app: "List the names of your available skills." The operator asks it, or approves desktop control for the hub. |
 | Two copies of the skill for ZCode and for OpenCode (the own folder and the shared agents folder) | An operator decision: keep the two copies, or remove the targets `zcode` and `opencode` from the installer |
 | The installer reports the target `cline` as not supported | A small code change: Cline reads the shared agents folder |
 | The Codex built-in web tool in read mode | A flag that removes it, and a live test |
@@ -109,7 +109,7 @@ A live dispatch or live test, an installer run with `--apply`, a real `fix` run 
 | H4. Documentation and tidy | The user documents, the link test, release `0.2.0` | [handoffs/2026-11-20-h4-docs-and-tidy.md](handoffs/2026-11-20-h4-docs-and-tidy.md) |
 | Install | Six harness folders, release `0.2.1` | This file |
 | Codex as the caller | The operator's rule in `SKILL.md`, release `0.2.2` | [CHANGELOG](../CHANGELOG.md) |
-| H5. Skill loading check | ZCode lists the skill. For Antigravity, Cline, OpenCode and DeepSeek Harness the code reads a folder that holds the skill. No model call. | [handoffs/2026-11-20-h5-skill-loading-check.md](handoffs/2026-11-20-h5-skill-loading-check.md) |
+| H5. Skill loading check | ZCode, Antigravity and Cline list the skill. For OpenCode and DeepSeek Harness the code reads a folder that holds the skill, and no proof from the harness exists yet. | [handoffs/2026-11-20-h5-skill-loading-check.md](handoffs/2026-11-20-h5-skill-loading-check.md) |
 
 ## Measured cost
 
@@ -121,8 +121,8 @@ API list price, `session-dispatch` price table `2026-11-20`, measured with `sess
 | H2 acceptance and review | `claude-opus-5-5` | 83 | 6.99 |
 | H4 documentation and tidy | `claude-sonnet-5-5` | 49 | 1.66 |
 | H5 skill loading check (sub-agent) | `claude-sonnet-5-5` | 61 | 1.18 |
-| Hub, to this update | `claude-fable-5-2` | 173 | 41.86 |
+| Hub, to this update | `claude-fable-5-2` | 185 | 46.05 |
 
-Total: 60.26 USD. The hub is 69 percent. Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
+Total: 64.45 USD. The hub is 71 percent. The wait for the operator's approval of the live checks was longer than the cache lifetime of 1 hour, so the hub wrote its whole context to the cache again one time (about 3 USD). Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
 
 The dispatched test tasks used the quota of the target plans. Claude Code reported 0.0065 USD for its test task.

@@ -111,6 +111,18 @@ Defects and facts for the operator:
 - No proof without a model call exists for Antigravity, Cline and DeepSeek Harness. For OpenCode, one start of the desktop app writes a log that can give the proof.
 - `dsh --profile web --help` printed nothing in 60 seconds and was stopped. Do not use it as a help command. No `dsh` process was left.
 
+### Live checks (hub, 2026-11-21, approved by the operator)
+
+Session dispatch not run: under 10 turns remain (estimate 8), no other trigger.
+
+| Harness | Check | Result |
+|---|---|---|
+| Antigravity | `hd run --to antigravity --access read` from the installed skill, in an empty folder, with the prompt "List the names of all skills that are available to you in this session." | **Observed.** `ok: true`. The answer has 81 names, and `harness-dispatch` is one of them. Usage: 20,308 input and 6,569 output tokens. The list has no skill that is only in `~/.agents/skills`, so `agy` does not read that folder as a global folder. |
+| Cline | `cline -p --auto-approve false --json -t 180 -c <empty folder> "<the same prompt>"` | **Observed.** `finishReason: completed`, one iteration, model `google/gemini-4-neon` on the provider `cline`. The answer has 51 names, the same number as the folders in `~/.agents/skills`, and `harness-dispatch` is one of them. Usage: 5,570 input and 2,138 output tokens. Reported cost: 0. |
+| OpenCode | One start of the desktop app (version 1.19.5), then a search of its logs and data folders | **No proof.** The app wrote no line about skills at the start. The log `~/.local/share/opencode/log/opencode.log` did not change. The local server answered 401 to a request without a password, and the hub did not look for the password. Side effect: the app downloaded the update 1.19.6 to its updater folder. The hub closed the app. |
+
+Level after the live checks: A for ZCode, Antigravity and Cline. B for OpenCode and DeepSeek Harness.
+
 Measured cost of the sub-agent: 61 calls, 1.18 USD (`session-cost.mjs`, table `2026-11-20`). The projection was 30 calls and 1.70 USD or less.
 
 ## Session dispatch decision
