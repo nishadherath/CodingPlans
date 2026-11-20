@@ -12,6 +12,11 @@ node <skill folder>/scripts/hd.mjs <command> ...                  # the installe
 
 `stdout` holds one JSON object and one newline. Diagnostics go to `stderr`.
 
+## Two ways to use the skill
+
+1. **Ask your agent.** After the install, tell your agent in plain words what to send and where, for example "Dispatch this diff to Codex and ask for a review". The agent loads the skill, reads `SKILL.md` and runs the script. Say "with write access" only when the other agent must change files.
+2. **Run the script yourself.** Use the commands in this document. The short guide is in the [README](../README.md#how-to-use-it).
+
 ## Commands
 
 | Command | Purpose | Model call |

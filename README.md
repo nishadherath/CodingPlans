@@ -2,7 +2,7 @@
 
 `harness-dispatch` is a skill for coding agents. An agent in one harness runs one script and sends a task to a different coding agent CLI. The script returns one JSON result.
 The targets are Claude Code, OpenAI Codex and Google Antigravity. The script has no dependencies and needs Node 22 or later.
-The skill is built and tested. It is **not installed** by this repository. You install it yourself ([docs/install.md](docs/install.md)).
+The skill is built and tested. This repository does not install it on its own. You run the installer yourself ([docs/install.md](docs/install.md)).
 
 ## Why it exists
 
@@ -30,9 +30,25 @@ caller agent --(node hd.mjs run --to codex ...)--> hd.mjs --(spawn, no shell)-->
      +----------- one JSON envelope on stdout <-------+------ raw output in a log <---+
 ```
 
-## Quick start
+## How to use it
 
-Run these commands in this repository. They start no model.
+You talk to one agent. That agent sends a task to a different coding agent on this machine and reads the answer. You do not copy text between tools.
+
+### Method 1: ask your agent
+
+After the install ([docs/install.md](docs/install.md)), tell your agent in plain words what to send and where. The agent loads the skill and runs the script.
+
+- "Dispatch this diff to Codex and ask for a review."
+- "Get a second opinion from Antigravity on this design."
+- "Send this summary task to Claude Code on the Haiku model."
+
+Say "with write access" only when the other agent must change files.
+
+### Method 2: run the script yourself
+
+From this repository the command is `node bin/harness-dispatch.mjs`. From an installed copy it is `node <skill folder>/scripts/hd.mjs`.
+
+Step 1. Check the targets. These commands start no model.
 
 ```powershell
 node bin/harness-dispatch.mjs list
@@ -40,13 +56,46 @@ node bin/harness-dispatch.mjs doctor
 ```
 
 `list` shows each target, its program and its version. `doctor` shows if each target is installed, startable and signed in.
-The next command sends a task to a model. It uses your plan quota. Access is `read`, the default.
+
+Step 2. Send a task. This command uses your plan quota. Access is `read`, the default.
 
 ```powershell
-node bin/harness-dispatch.mjs run --to claude --prompt "List the exported functions of src/dispatch/index.mjs."
+node bin/harness-dispatch.mjs run --to codex --prompt "Review src/dispatch/guard.mjs for defects. Give a list with line numbers."
 ```
 
-The same commands run from the skill folder after you install it: `node <skill folder>/scripts/hd.mjs ...`. The full list of commands is in [docs/usage.md](docs/usage.md).
+Step 3. Read the result. The script prints one JSON object on `stdout`.
+
+| Field | Meaning |
+|---|---|
+| `ok` | `true` when the target completed the task |
+| `text` | The answer |
+| `session_id` | Give this to `--resume` to continue the same conversation |
+| `usage` | The tokens that the target used |
+| `error` | `null`, or a code and a message |
+| `log_file` | The raw output of the target |
+
+### The flags that you will use most
+
+| Flag | Use |
+|---|---|
+| `--to claude`, `--to codex`, `--to antigravity` | Select the target |
+| `--prompt "<text>"` or `--prompt-file <path>` | Give the task. With neither flag, the script reads the task from `stdin`. |
+| `--model <id>` and `--effort <level>` | Select the model and the effort. `hd models --to antigravity` lists the Antigravity models. |
+| `--access write` | Let the target change files. The default is `read`. |
+| `--cwd <dir>` | The folder that the target works in |
+| `--resume <session_id>` | Continue an earlier conversation |
+| `--schema <file>` | Get the answer as JSON that agrees with a JSON Schema |
+| `--timeout <seconds>` | The time limit. The default is 600. |
+
+### Rules for good results
+
+1. Write a brief that stands alone. Give the goal, the files, the limits, and the form of the answer.
+2. Use read access unless the task must change files.
+3. Do not put secrets in a prompt. Do not send content from a source that you do not trust.
+4. Check the answer. A dispatched answer is a report, not a proof.
+5. If `error.code` is `usage-limit`, do not send to that target again until the limit resets.
+
+The full list of commands, flags, error codes and exit codes is in [docs/usage.md](docs/usage.md).
 
 ## Targets and callers
 

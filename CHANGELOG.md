@@ -2,6 +2,12 @@
 
 Back to the [README](README.md).
 
+## Documentation update (2026-11-20, tag `v0.2.1-docs.1`)
+
+- `README.md` now has the usage instructions: the two methods, the result fields, the common flags and the rules for good results.
+- `docs/usage.md` has a short section on the two methods.
+- The skill and its version are unchanged from 0.2.1. The installed copies need no update.
+
 ## 0.2.1 (2026-11-20)
 
 - No change in behaviour. The version number changes so that the installed copies and the tag agree.
