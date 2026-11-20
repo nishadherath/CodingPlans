@@ -82,13 +82,16 @@ When the operator must decide, give: the decision, the options, the advantages a
 
 ## 8. Project facts: CodingPlans
 
-- Purpose since 2026-11-20: the skill `harness-dispatch`. An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
+- Purpose since 2026-11-20: the skill `harness-dispatch` (version 0.2.0, package `harness-dispatch`, `private`). An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
+- Start with `README.md`. The user documents are in `docs/` (index: `docs/README.md`). Release notes: `CHANGELOG.md`.
 - Specification: `docs/design/harness-dispatch-contract.md`. Read it before you change code.
+- Skill: `skill/harness-dispatch/SKILL.md` (hand-written) and `skill/harness-dispatch/scripts/hd.mjs` (generated bundle). Sources: `src/dispatch/`. Installer: `scripts/install-skill.mjs`.
 - Do not install the skill in a harness. The operator does that.
-- First purpose, now legacy: repair and verify the Cline providers `claude-code` and `openai-codex-cli` (`README.md`). Its defects are in `docs/analysis/2026-11-20-project-assessment.md`. That work is deferred.
-- Live status: `docs/STATUS.md`. Handoffs: `docs/handoffs/`.
+- Legacy tool: repair and verify the Cline providers `claude-code` and `openai-codex-cli` (`docs/legacy-cline-providers.md`). Its defects are in `docs/analysis/2026-11-20-project-assessment.md`. That work is deferred. Do not remove its modules.
+- Live status: `docs/STATUS.md`. Handoffs: `docs/handoffs/`. The hub session owns `docs/STATUS.md`.
 - Runtime: Node 22 or later, ESM, no runtime dependencies. Keep it that way unless the operator approves a change.
-- Commands: `npm test` (unit tests, free), `npm run build:dist` (regenerates `dist/`), `node dist/cli.mjs doctor` (read-only diagnosis).
-- `dist/` is committed and generated. Do not edit it by hand. Rebuild it when `src/` or `bin/` changes.
+- Commands: `npm test` (unit tests, free, no model call), `npm run check:bundles`, `npm run build:dist` (regenerates `dist/` and the skill bundle), `npm run hd -- list` (the dispatch CLI), `node dist/cli.mjs doctor` (legacy, read-only diagnosis).
+- `dist/` and `skill/harness-dispatch/scripts/hd.mjs` are committed and generated. Do not edit them by hand. Rebuild them when `src/` or `bin/` changes.
+- Text files use LF (`.gitattributes`).
 - The operator's machine is Windows 11 with PowerShell. Node child processes cannot start `.cmd` shims by bare name. Resolve an absolute path first.
 - `doctor --json` output can contain an account email. Do not paste it into chat, a commit or an issue.
