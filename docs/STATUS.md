@@ -1,6 +1,6 @@
 # Live status
 
-Last update: 2026-11-21, after the check of the public repository and the history rewrite (stage H7), by the hub session (`claude-fable-5-2`).
+Last update: 2026-11-21, after the check of the public repository, the history rewrite and the replacement of the repository (stage H7), by the hub session (`claude-fable-5-2`).
 
 The hub session updates this file at each handoff and at each gate. Section 6 of `AGENTS.md` gives the rules.
 
@@ -82,7 +82,7 @@ The user document for these limits is [safety.md](safety.md).
 - The Codex CLI must be recent. Version 0.154.0 was rejected by the service. The skill selects the newest `codex` program that it finds.
 - OpenCode finds the skill in two folders and writes one warning about the duplicate name.
 - The default installer run skips the shared folder when `~/.agents` does not exist. Name a harness with `--target` in that case.
-- The history rewrite of 2026-11-21 does not fully undo the earlier publication. GitHub can keep old commits reachable by their full id for some time. See [handoffs/2026-11-21-h7-public-repository-check.md](handoffs/2026-11-21-h7-public-repository-check.md).
+- The public repository was replaced on 2026-11-21 by a new one that holds only the clean history. A clone from before that day holds the old data and cannot merge with the new history. See [handoffs/2026-11-21-h7-public-repository-check.md](handoffs/2026-11-21-h7-public-repository-check.md).
 - Review gaps: the hub reviewed the Codex read hardening (part 3), the user documents and the installer change of stage H6. No separate acceptance session read them.
 
 ## Open work
@@ -131,8 +131,8 @@ API list price, `session-dispatch` price table `2026-11-20`, measured with `sess
 | H5 skill loading check (sub-agent) | `claude-sonnet-5-5` | 61 | 1.18 |
 | H6 installer and documents (sub-agent) | `claude-sonnet-5-5` | 39 | 1.03 |
 | H7 scan of the public repository (sub-agent) | `claude-sonnet-5-5` | 70 | 2.51 |
-| Hub, to this update | `claude-fable-5-2` | 270 | 61.26 |
+| Hub, to this update | `claude-fable-5-2` | 289 | 64.02 |
 
-Total: 83.20 USD. The hub is 74 percent. Desktop control used 32 hub calls and about 5.8 USD. The wait for the operator's approval of the live checks was longer than the cache lifetime of 1 hour, so the hub wrote its whole context to the cache again one time (about 3 USD). Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
+Total: 85.96 USD. The hub is 74 percent. Desktop control used 32 hub calls and about 5.8 USD. The wait for the operator's approval of the live checks was longer than the cache lifetime of 1 hour, so the hub wrote its whole context to the cache again one time (about 3 USD). Every live run and every outward step (install, merge, push) had to be in the hub session, and that session has the largest context. A new project must start a new hub session after the design stage to lower this share.
 
 The dispatched test tasks used the quota of the target plans. Claude Code reported 0.0065 USD for its test task.

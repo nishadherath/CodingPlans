@@ -52,14 +52,21 @@ The operator decided each item on 2026-11-21:
 - Effect: 65 commits became 63. Two commits became empty and were removed: the commit that deleted the stray file, and the commit that removed the account name from the handoff. The first two commits kept their ids. All later commits and all 7 release tags have new ids.
 - Check after the rewrite: a search of every commit and every message for the removed strings gave 0 hits. The file tree of the last commit differs from the old one in one file only, the H5 record. The tests pass: 198 tests, 190 pass, 0 fail, 8 skipped.
 - The commit ids that the older handoff files name were changed to the new ids (41 places).
-- The branch and the tags were pushed with force.
+- The branch and the tags were pushed with force to the first repository, and later to the new repository (see below).
+
+## The replacement of the repository
+
+- A forced push does not remove old commits from GitHub. The hub tested this after the push: GitHub still returned the stray file when the request named the old commit id.
+- The operator then made the first repository private under a different name. The hub created a new public repository with the same name and pushed the clean history to it: 64 commits on `main` and 8 release tags.
+- Check: the refs of the new repository are identical to the local refs. For four old commit ids, and for the stray file, the new repository answers "No commit found".
+- The settings of the first repository were set again: public, issues on, wiki off, the description, secret scanning and push protection on.
 
 ## Limits
 
-- A rewrite does not fully undo a publication. GitHub can keep the old commits reachable by their full id for some time. A person who cloned the repository before the rewrite has the old data. The repository had 0 forks.
-- The sure method is to delete the repository on GitHub and to push the clean history to a new one. Only the operator can do that.
+- A person who cloned the repository before the rewrite has the old data. The first repository had 0 forks.
 - The removed data was an account name, one session id and details of a different project. No credential was public, so no credential needs a replacement.
 - A clone that was made before 2026-11-21 cannot merge with the new history. Make a new clone.
+- The new repository has a new creation date. A link to an old commit id does not work.
 
 ## Session dispatch decisions
 

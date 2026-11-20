@@ -2,6 +2,11 @@
 
 Back to the [README](README.md).
 
+## Documentation update (2026-11-21, tag `v0.2.3-docs.3`)
+
+- The public repository was replaced by a new one with the same name. It holds only the clean history. The first repository is private. The new repository does not serve the old commit ids.
+- The record of stage H7 and the status file state this. The skill and its version are unchanged from 0.2.3.
+
 ## Documentation update (2026-11-21, tag `v0.2.3-docs.2`)
 
 - The repository is public. A scan of all files and of the full history found no credential and no e-mail address.
