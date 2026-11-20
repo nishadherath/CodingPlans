@@ -17,7 +17,7 @@ Done means: a written verdict (`accept`, `accept with listed defects`, or `rejec
 
 ## Scope
 
-Commits `436f612` to the head of `feat/harness-dispatch`. Compare them with `docs/design/harness-dispatch-contract.md`.
+Commits `991e356` to the head of `feat/harness-dispatch`. Compare them with `docs/design/harness-dispatch-contract.md`.
 
 ## Decisions already made
 

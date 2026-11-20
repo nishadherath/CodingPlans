@@ -3,14 +3,14 @@ stage: "H2 part 2: acceptance of the H3 corrections"
 model: claude-opus-5-5
 effort: high
 created: 2026-11-20
-reviewed: "git diff 3c283b6..HEAD (code 00f301e, 755c6a4, 8a7a60d; docs 51a2bfc, 26a536d)"
+reviewed: "git diff d2f93f8..HEAD (code f38f247, 9bc93df, a840a01; docs 4255b72, 6f6be5d)"
 ---
 
 # H2 part 2: acceptance of the H3 corrections
 
 ## Verdict
 
-**Accept with listed defects.** The argument arrays of the three adapters agree with the `--help` texts of the installed CLIs (Claude Code 2.1.316, Codex 0.167.0-alpha.4.1, `agy` 1.5.13). Version selection and the path override are correct. One defect is corrected (D10). Two documentation defects and one small usability defect stay open. No defect blocks install. D1 to D5 and D8 show no regression. D9 is corrected by `8a7a60d`.
+**Accept with listed defects.** The argument arrays of the three adapters agree with the `--help` texts of the installed CLIs (Claude Code 2.1.316, Codex 0.167.0-alpha.4.1, `agy` 1.5.13). Version selection and the path override are correct. One defect is corrected (D10). Two documentation defects and one small usability defect stay open. No defect blocks install. D1 to D5 and D8 show no regression. D9 is corrected by `a840a01`.
 
 ## Oracle
 
@@ -21,7 +21,7 @@ reviewed: "git diff 3c283b6..HEAD (code 00f301e, 755c6a4, 8a7a60d; docs 51a2bfc,
 
 | Id | Severity | File and line | Proof | State |
 |---|---|---|---|---|
-| D10 | correct soon | `src/dispatch/parse.mjs:119` (`USAGE_LIMIT`) | `failureCode("Context limit reached")`, `"time limit reached"`, `"output token limit reached"` and `"Error: ENOENT at line 429"` gave `usage-limit`. `SKILL.md` then tells the caller to stop dispatching to a working target and to report a reset time that does not exist. | corrected in `3496597`. `limit reached` needs a plan period (`hour`, `weekly` ...). `429` needs `error`, `status`, `code` or `http` before it. `hit your 5-hour limit` now matches. The test failed before the change. |
+| D10 | correct soon | `src/dispatch/parse.mjs:119` (`USAGE_LIMIT`) | `failureCode("Context limit reached")`, `"time limit reached"`, `"output token limit reached"` and `"Error: ENOENT at line 429"` gave `usage-limit`. `SKILL.md` then tells the caller to stop dispatching to a working target and to report a reset time that does not exist. | corrected in `eadd95e`. `limit reached` needs a plan period (`hour`, `weekly` ...). `429` needs `error`, `status`, `code` or `http` before it. `hit your 5-hour limit` now matches. The test failed before the change. |
 | D11 | correct soon | `src/dispatch/harnesses/codex.mjs:57-70`; `SKILL.md:61`; contract 7.2 | A read run passes nothing that removes the MCP servers or hooks of `~/.codex/config.toml`. On this machine that file has 3 `[mcp_servers.*]` and 8 `[hooks.*]` sections (section names counted, no values read). The Codex warning names only computer-use and connected apps. Low confidence: I think that MCP servers and hooks run outside the shell sandbox. A live check by the hub is needed. | open |
 | D12 | minor | `SKILL.md:60,62`; contract 7.1, 7.3 | `claude --help`: `--restricted` ignores the user, project and local settings, but "managed settings and --settings still apply". So "no hooks" is false for managed hooks. Antigravity: the deny rule covers only `command(*)`. `~/.gemini/config/mcp_config.json` lists 5 MCP servers. No live run tested an MCP or browser tool in read mode, so "file read and search tools only" is not proved for either target. | open |
 | D13 | minor | `src/dispatch/resolve.mjs:220` | `HARNESS_DISPATCH_CLAUDE_PATH='"C:\...\node.exe"'` (quotes included, a common PowerShell mistake) gives "must be an absolute path. Got a relative path." The message does not name the quotes. | open |
@@ -40,7 +40,7 @@ reviewed: "git diff 3c283b6..HEAD (code 00f301e, 755c6a4, 8a7a60d; docs 51a2bfc,
 ## Author deviations 14 to 24
 
 All 11 are accepted.
-- 14: one commit for items 1 to 7. Accepted, because the items share files. The commit between the two has one failing test, so the history does not bisect cleanly at `00f301e`.
+- 14: one commit for items 1 to 7. Accepted, because the items share files. The commit between the two has one failing test, so the history does not bisect cleanly at `f38f247`.
 - 24: a Claude run with denials and no answer gives `bad-output`, not `permission-denied`, and `denied_actions` is filled. Accepted until a real capture exists. It differs from the rule for Antigravity.
 
 ## Not checked

@@ -2,6 +2,13 @@
 
 Back to the [README](README.md).
 
+## Documentation update (2026-11-21, tag `v0.2.3-docs.2`)
+
+- The repository is public. A scan of all files and of the full history found no credential and no e-mail address.
+- The history was written again to remove three private items: a stray capture file, a Windows account name in an old version of a handoff file, and details of a different project in an incident record. 65 commits became 63. All commit ids after the second commit are new, and all release tags were created again. A clone from before this date cannot merge with the new history: make a new clone.
+- `LICENSE`: the copyright line names the owner of this repository.
+- The record is `docs/handoffs/2026-11-21-h7-public-repository-check.md`. The skill and its version are unchanged from 0.2.3.
+
 ## Documentation update (2026-11-21, tag `v0.2.3-docs.1`)
 
 - The operator approved the install of version 0.2.3. The four skill folders now hold version 0.2.3, identical to the repository.
