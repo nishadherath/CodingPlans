@@ -2,6 +2,16 @@
 
 Back to the [README](README.md).
 
+## 0.2.3 (2026-11-21)
+
+- Installer: four skill folders for seven harnesses. The folders are `.claude/skills`, `.codex/skills`, `.gemini/config/skills` and the shared folder `.agents/skills`. ZCode, OpenCode, Cline and DeepSeek Harness read the shared folder. The ids `zcode`, `opencode`, `cline` and the new id `deepseek` select it. A run with more than one of these ids gives one step. The plan names the harnesses that read each folder.
+- Installer: the own folders of ZCode (`.zcode/skills`) and OpenCode (`.config/opencode/skill`) are removed from the target list, because a second copy only made these harnesses find the skill two times. The target `cline` is no longer "not supported".
+- Result of stage H5 (2026-11-21): all five harnesses that were not checked before load the skill. They are ZCode, Antigravity, Cline, OpenCode and DeepSeek Harness. Each proof is output of the harness itself. Antigravity does not read the shared folder. The record is in `docs/STATUS.md`.
+- On the operator's machine, the two old copies in `~/.zcode/skills` and `~/.config/opencode/skill` were removed on 2026-11-21 with the old installer.
+- `SKILL.md`: the list of skill folders has four entries and names the harnesses of the shared folder. The rule for Codex is unchanged.
+- Note for a machine with the old copies: remove the folders `~/.zcode/skills/harness-dispatch` and `~/.config/opencode/skill/harness-dispatch` by hand. The new installer does not touch them.
+- Documents: the folder list, the proof state and the version number agree with these facts.
+
 ## Documentation update (2026-11-20, tag `v0.2.2-docs.1`)
 
 - `docs/STATUS.md` is written again from the present state: release, install record, proof state, known limits, open work, history and measured cost. The old stage lists are removed.

@@ -82,11 +82,11 @@ When the operator must decide, give: the decision, the options, the advantages a
 
 ## 8. Project facts: CodingPlans
 
-- Purpose since 2026-11-20: the skill `harness-dispatch` (version 0.2.2, package `harness-dispatch`, `private`). An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
+- Purpose since 2026-11-20: the skill `harness-dispatch` (version 0.2.3, package `harness-dispatch`, `private`). An agent in one harness sends a task to a different harness (Claude Code, Codex, Antigravity; later ZCode, OpenCode, Cline) and gets one JSON result.
 - Start with `README.md`. The user documents are in `docs/` (index: `docs/README.md`). Release notes: `CHANGELOG.md`.
 - Specification: `docs/design/harness-dispatch-contract.md`. Read it before you change code.
 - Skill: `skill/harness-dispatch/SKILL.md` (hand-written) and `skill/harness-dispatch/scripts/hd.mjs` (generated bundle). Sources: `src/dispatch/`. Installer: `scripts/install-skill.mjs`.
-- The skill is installed in six harness folders on the operator's machine, at the released version (`docs/STATUS.md` has the record). Run the installer with `--apply` only when the operator tells you to. The installed copies do not follow the repository.
+- The skill is installed in four skill folders on the operator's machine. They serve seven harnesses: ZCode, OpenCode, Cline and DeepSeek Harness read the shared folder `~/.agents/skills`. The copies can be older than the repository (`docs/STATUS.md` has the record). Run the installer with `--apply` only when the operator tells you to. The installed copies do not follow the repository.
 - Legacy tool: repair and verify the Cline providers `claude-code` and `openai-codex-cli` (`docs/legacy-cline-providers.md`). Its defects are in `docs/analysis/2026-11-20-project-assessment.md`. That work is deferred. Do not remove its modules.
 - Live status: `docs/STATUS.md`. Handoffs: `docs/handoffs/`. The hub session owns `docs/STATUS.md`.
 - Runtime: Node 22 or later, ESM, no runtime dependencies. Keep it that way unless the operator approves a change.

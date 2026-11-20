@@ -21,26 +21,42 @@ export const SKILL_NAME = "harness-dispatch";
 export const MARKER = ".harness-dispatch-install.json";
 
 /**
- * Skill folders, as seen on the operator's machine on 2026-11-20.
+ * Skill folders. Each folder gets one install step.
  * `root` is the folder that shows the harness is present.
+ * `serves` names the harnesses that read the folder. The plan prints it, so
+ * the operator sees why the folder exists.
+ *
+ * Proof (stage H5, 2026-11-21): ZCode, OpenCode, Cline and DeepSeek Harness
+ * each read the shared folder `~/.agents/skills`. So they have no folder of
+ * their own here. A second copy in the own folder of ZCode or OpenCode only
+ * made the harness find the skill two times. Antigravity does not read the
+ * shared folder.
  */
 export const TARGETS = [
-	{ id: "claude", skills: [".claude", "skills"], root: [".claude"] },
-	{ id: "codex", skills: [".codex", "skills"], root: [".codex"] },
-	{ id: "antigravity", skills: [".gemini", "config", "skills"], root: [".gemini"] },
-	{ id: "opencode", skills: [".config", "opencode", "skill"], root: [".config", "opencode"] },
-	{ id: "zcode", skills: [".zcode", "skills"], root: [".zcode"] },
-	{ id: "agents", skills: [".agents", "skills"], root: [".agents"] },
-	{ id: "cline", unsupported: true },
+	{ id: "claude", skills: [".claude", "skills"], root: [".claude"], serves: ["Claude Code"] },
+	{ id: "codex", skills: [".codex", "skills"], root: [".codex"], serves: ["Codex"] },
+	{ id: "antigravity", skills: [".gemini", "config", "skills"], root: [".gemini"], serves: ["Antigravity"] },
+	{ id: "agents", skills: [".agents", "skills"], root: [".agents"], serves: ["ZCode", "OpenCode", "Cline", "DeepSeek Harness"] },
 ];
+
+/**
+ * Harness ids that resolve to the folder of another target. The operator can
+ * name the harness, and the installer picks the folder that the harness reads.
+ */
+export const ALIASES = { zcode: "agents", opencode: "agents", cline: "agents", deepseek: "agents" };
+
+/** Every id that `--target` accepts. */
+const KNOWN_IDS = [...TARGETS.map((t) => t.id), ...Object.keys(ALIASES)];
 
 const HELP = `Install the harness-dispatch skill.
 
 Usage:
   node scripts/install-skill.mjs [--target <id>]... [--home <dir>] [--apply] [--uninstall]
 
-  --target <id>   One of: ${TARGETS.map((t) => t.id).join(", ")}. Can be repeated.
-                  Default: each harness whose home folder exists.
+  --target <id>   One of: ${KNOWN_IDS.join(", ")}. Can be repeated.
+                  The ids zcode, opencode, cline and deepseek select the shared
+                  folder of the target "agents". These harnesses read it.
+                  Default: each folder whose harness home folder exists.
   --home <dir>    Use this home folder. Default: your home folder.
   --apply         Make the changes. Without it, the script only prints them.
   --uninstall     Remove folders that this installer made.
@@ -60,8 +76,8 @@ export function parseArgs(argv) {
 			const value = argv[++i];
 			if (value === undefined) return { error: `The flag ${token} needs a value.` };
 			if (token === "--home") options.home = value;
-			else if (TARGETS.some((t) => t.id === value)) options.targets.push(value);
-			else return { error: `Unknown target "${value}". Known targets: ${TARGETS.map((t) => t.id).join(", ")}.` };
+			else if (KNOWN_IDS.includes(value)) options.targets.push(value);
+			else return { error: `Unknown target "${value}". Known targets: ${KNOWN_IDS.join(", ")}.` };
 		} else return { error: `Unknown argument "${token}".` };
 	}
 	return { options };
@@ -79,28 +95,30 @@ const exists = (path) => {
  * Decide what to do for each target. This function reads the file system and
  * changes nothing.
  *
- * @returns {Array<{ id: string, action: string, dest?: string, note: string }>}
- *   action: copy | replace | remove | skip | unsupported | none
+ * One folder gets one step. Two ids that resolve to the same folder (for
+ * example `zcode` and `cline`) give one step.
+ *
+ * @returns {Array<{ id: string, action: string, dest: string, serves: string[], note: string }>}
+ *   action: copy | replace | remove | skip | none
  */
 export function plan({ home, targets, uninstall }) {
 	const explicit = targets.length > 0;
-	const selected = explicit ? TARGETS.filter((t) => targets.includes(t.id)) : TARGETS.filter((t) => !t.unsupported);
+	const wanted = new Set(targets.map((id) => ALIASES[id] ?? id));
+	const selected = explicit ? TARGETS.filter((t) => wanted.has(t.id)) : TARGETS;
 	return selected.map((target) => {
-		if (target.unsupported) return { id: target.id, action: "unsupported", note: "not supported yet (no skill folder found)" };
 		const dest = join(home, ...target.skills, SKILL_NAME);
-		if (!explicit && !exists(join(home, ...target.root))) {
-			return { id: target.id, action: "skip", dest, note: "harness folder not found" };
-		}
+		const step = (action, note) => ({ id: target.id, action, dest, serves: target.serves, note });
+		if (!explicit && !exists(join(home, ...target.root))) return step("skip", "harness folder not found");
 		const present = existsSync(dest);
 		const ours = present && existsSync(join(dest, MARKER));
 		if (uninstall) {
-			if (!present) return { id: target.id, action: "none", dest, note: "nothing to remove" };
-			if (!ours) return { id: target.id, action: "skip", dest, note: "exists, and this installer did not make it: left alone" };
-			return { id: target.id, action: "remove", dest, note: "remove" };
+			if (!present) return step("none", "nothing to remove");
+			if (!ours) return step("skip", "exists, and this installer did not make it: left alone");
+			return step("remove", "remove");
 		}
-		if (!present) return { id: target.id, action: "copy", dest, note: "copy" };
-		if (!ours) return { id: target.id, action: "skip", dest, note: "exists, and this installer did not make it: left alone" };
-		return { id: target.id, action: "replace", dest, note: "replace the earlier install" };
+		if (!present) return step("copy", "copy");
+		if (!ours) return step("skip", "exists, and this installer did not make it: left alone");
+		return step("replace", "replace the earlier install");
 	});
 }
 
@@ -150,11 +168,17 @@ export function main(argv, io = {}) {
 	const steps = plan({ home, targets: options.targets, uninstall: options.uninstall });
 	const verb = { copy: "copy", replace: "replace", remove: "remove" };
 	const past = { copy: "copied", replace: "replaced", remove: "removed" };
+	// The plan names the harnesses that read each folder, so the operator sees the reason for it.
+	const readers = (step) => `  (read by ${step.serves.join(", ")})`;
 
 	if (!options.apply) {
 		out(`Dry run. Home folder: ${home}\n`);
 		for (const step of steps) {
-			out(verb[step.action] ? `  would ${verb[step.action]}  ${step.id}  ${step.dest}\n` : `  ${step.action.padEnd(11)} ${step.id}  ${step.note}\n`);
+			out(
+				verb[step.action]
+					? `  would ${verb[step.action]}  ${step.id}  ${step.dest}${readers(step)}\n`
+					: `  ${step.action.padEnd(11)} ${step.id}  ${step.note}${readers(step)}\n`,
+			);
 		}
 		out("No file was changed. Add --apply to make these changes.\n");
 		// A dry run reports a conflict as exit code 0: nothing failed.
@@ -166,9 +190,9 @@ export function main(argv, io = {}) {
 		if (result.error) {
 			err(`  FAILED  ${result.id}  ${result.error}\n`);
 			code = 1;
-		} else if (past[result.action]) out(`  ${past[result.action].padEnd(8)} ${result.id}  ${result.dest}\n`);
+		} else if (past[result.action]) out(`  ${past[result.action].padEnd(8)} ${result.id}  ${result.dest}${readers(result)}\n`);
 		else {
-			out(`  ${result.action.padEnd(11)} ${result.id}  ${result.note}\n`);
+			out(`  ${result.action.padEnd(11)} ${result.id}  ${result.note}${readers(result)}\n`);
 			if (result.action === "skip" && result.note.startsWith("exists")) code = 1;
 		}
 	}

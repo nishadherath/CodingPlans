@@ -93,6 +93,15 @@ Report in five lines: what you tried, what failed, the exact error, what you nee
 
 Read `AGENTS.md` sections 7 and 8, then `scripts/install-skill.mjs` and its test, then do the work above. After the report, the hub reviews the diff, updates `docs/STATUS.md` and `AGENTS.md`, commits, merges to `main`, tags `v0.2.3` and pushes (the operator approved the push on 2026-11-21). A new install of version 0.2.3 needs a separate approval.
 
+## Result (hub, 2026-11-21)
+
+- The sub-agent met each oracle line. The hub ran the commands again: 198 tests, 190 pass, 0 fail, 8 skipped; the bundles are current; the version is `0.2.3`.
+- The hub read the diff of the installer and of each document. It tested the new installer in a temporary home folder: install through two ids gave one step, the dry run showed four folders, `--uninstall --target deepseek --apply` removed the copy, and an unknown id gave exit code 2.
+- The hub changed the files that it owns: `docs/STATUS.md`, `AGENTS.md`, and one line of the specification ("Do not install the skill" was a rule of the build stage).
+- Not done: an install of version 0.2.3. The four installed copies are version 0.2.2. The operator approves each installer run.
+- A limit that the hub found in the review: a run without `--target` skips the shared folder when `~/.agents` does not exist. It is in the known limits of the status file.
+- Measured cost of the sub-agent: 39 calls, 1.03 USD (`session-cost.mjs`, table `2026-11-20`). The projection was 35 calls and about 2.0 USD.
+
 ## Session dispatch decision
 
 Run because the operator asked for it, the stage has more than 10 calls, and the hub session was summarised once.

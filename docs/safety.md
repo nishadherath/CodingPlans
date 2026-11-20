@@ -61,7 +61,7 @@ Do not put secrets in a prompt. The target keeps its own session history.
 
 ## What the skill never does
 
-- It never passes a bypass flag: not `--dangerously-skip-permissions`, not `--dangerously-bypass-approvals-and-sandbox`, not `bypassPermissions`. Version 0.2.2 has no option that removes all permission checks.
+- It never passes a bypass flag: not `--dangerously-skip-permissions`, not `--dangerously-bypass-approvals-and-sandbox`, not `bypassPermissions`. Version 0.2.3 has no option that removes all permission checks.
 - It never uses a shell. It starts each target with an argument list and an absolute path.
 - It never fixes a model id in code. `--model` goes to the target unchanged.
 - It never signs in for you. If a target is not signed in, `hd` reports it.

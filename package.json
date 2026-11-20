@@ -1,6 +1,6 @@
 {
   "name": "harness-dispatch",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "harness-dispatch: a portable skill that sends a task from one coding agent CLI to another (Claude Code, OpenAI Codex, Google Antigravity) and returns one JSON result. Also holds the legacy Cline provider repair tool.",
   "license": "Apache-2.0",

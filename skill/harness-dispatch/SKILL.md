@@ -17,7 +17,7 @@ node "<folder of this file>/scripts/hd.mjs" <command> [options]
 ```
 
 If you do not know the folder of this file, find `harness-dispatch/scripts/hd.mjs` in one of these folders:
-`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills`, `~/.config/opencode/skill`, `~/.zcode/skills`, `~/.agents/skills`.
+`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/config/skills`, `~/.agents/skills` (shared: ZCode, OpenCode, Cline and DeepSeek Harness read it).
 
 Use it when:
 - the operator asks you to dispatch, delegate or hand over a task;

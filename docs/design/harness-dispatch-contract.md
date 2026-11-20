@@ -15,8 +15,8 @@ This repository becomes a **skill** named `harness-dispatch`. The skill is one i
 
 - Dispatch targets in version 1: Claude Code (`claude`), OpenAI Codex (`codex`), Google Antigravity (`agy`).
 - Dispatch targets later: GLM ZCode, OpenCode, Cline.
-- Harnesses that can hold the skill: Claude Code, Codex, Antigravity, ZCode, OpenCode, and others that read a `SKILL.md` folder.
-- **Do not install the skill.** The operator installs it after acceptance.
+- Harnesses that can hold the skill: Claude Code, Codex, Antigravity, ZCode, OpenCode, Cline, DeepSeek Harness, and others that read a `SKILL.md` folder.
+- The installer changes a harness folder only with `--apply`. The operator approves each such run.
 
 ## 2. Principles
 
@@ -291,18 +291,17 @@ Later work, not in version 1: the `stream-json` mode for long prompts and warm s
 
 `scripts/install-skill.mjs` copies `skill/harness-dispatch/` into harness skill folders.
 
-| Target id | Folder (seen on this machine on 2026-11-20) |
-|---|---|
-| `claude` | `~/.claude/skills/harness-dispatch` |
-| `codex` | `~/.codex/skills/harness-dispatch` |
-| `antigravity` | `~/.gemini/config/skills/harness-dispatch` |
-| `opencode` | `~/.config/opencode/skill/harness-dispatch` |
-| `zcode` | `~/.zcode/skills/harness-dispatch` |
-| `agents` | `~/.agents/skills/harness-dispatch` |
-| `cline` | No skill folder found. Print "not supported yet". |
+| Target id | Folder (proved on this machine on 2026-11-21, stage H5) | Harnesses that read it |
+|---|---|---|
+| `claude` | `~/.claude/skills/harness-dispatch` | Claude Code |
+| `codex` | `~/.codex/skills/harness-dispatch` | Codex |
+| `antigravity` | `~/.gemini/config/skills/harness-dispatch` | Antigravity (it does not read the shared folder) |
+| `agents` | `~/.agents/skills/harness-dispatch` | ZCode, OpenCode, Cline, DeepSeek Harness |
+
+The ids `zcode`, `opencode`, `cline` and `deepseek` are aliases of the target `agents`. These harnesses have no folder of their own in the installer: a second copy only makes the harness find the skill two times. No target is "unsupported". The installer has no code for the old folders.
 
 1. The default is a dry run that prints each planned copy. A copy needs `--apply`.
-2. `--target <id>` selects targets. It can occur more than one time. `--home <dir>` replaces the home directory, for tests.
+2. `--target <id>` selects targets or aliases. It can occur more than one time. One folder gets one step: `--target zcode --target cline` gives one step, for `~/.agents/skills/harness-dispatch`. Without `--target`, the plan has at most four steps (`claude`, `codex`, `antigravity`, `agents`), and each step is skipped when the harness home folder does not exist. The plan names the harnesses that read each folder. An unknown id gives exit code 2. `--home <dir>` replaces the home directory, for tests.
 3. `--uninstall` removes only folders that the installer made. A marker file `.harness-dispatch-install.json` proves this.
 4. **No session runs the installer with `--apply` on the real home directory.** The operator does that.
 
@@ -320,7 +319,7 @@ No test calls a model. No test writes to the real home directory or to a real `P
 4. CLI: usage errors give exit code 2, and `stdout` is one JSON line in each case.
 5. Bundle smoke test: `node skill/harness-dispatch/scripts/hd.mjs list` gives exit code 0 and valid JSON.
 6. Legacy smoke test: `node bin/coding-plans.mjs help` gives exit code 0.
-7. Installer: dry run and `--apply` against a temporary `--home`.
+7. Installer: dry run and `--apply` against a temporary `--home`; the default plan; each alias; one step for one folder; `--uninstall`; an unknown id.
 
 Done means: `npm test` passes, `npm run build:dist` leaves no difference in the committed bundles, and the handoff note lists each deviation from this contract with its reason.
 

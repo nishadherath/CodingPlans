@@ -81,7 +81,7 @@ A target is one adapter file and one line in the registry.
 3. Add the adapter to `HARNESSES` in `src/dispatch/harnesses/index.mjs`.
 4. Map `read` and `write` access. Prove read access by a live run with a forced prompt before you claim it. See [safety](safety.md) for how earlier mappings failed.
 5. Add tests: a table of requests with the exact argument arrays, `parseOutput` with fixtures, and a `dispatch` test with an injected `exec`.
-6. Add the id to `TARGETS` in `scripts/install-skill.mjs` only if the harness can hold a skill.
+6. In `scripts/install-skill.mjs`, add the id to `TARGETS` only if the harness reads a skill folder that no target has. If the harness reads a folder that a target has (for example `~/.agents/skills`), add the id to `ALIASES`.
 7. Update `skill/harness-dispatch/SKILL.md`, the documents here, and the contract. Run `npm run build:dist` and `npm test`.
 
 `buildInvocation` and `parseOutput` stay pure so that tests can call them with tables and fixtures. The safety rules (no shell, no bypass flag, depth guard, tree kill) are in section 8 of the contract.

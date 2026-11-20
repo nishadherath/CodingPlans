@@ -25,7 +25,7 @@ The installer copies `skill/harness-dispatch/` into the skill folder of each har
 |---|---|
 | (none) | Dry run. It prints each planned step and changes nothing. |
 | `--apply` | Make the changes. |
-| `--target <id>` | Install in one harness. Repeat the flag for more than one. Default: each harness whose home folder exists. |
+| `--target <id>` | Install in the folder of one harness. Repeat the flag for more than one. Default: each folder whose harness home folder exists. The ids `zcode`, `opencode`, `cline` and `deepseek` select the shared folder. |
 | `--home <dir>` | Use this folder as the home folder. Default: your home folder. |
 | `--uninstall` | Remove folders that the installer made. |
 
@@ -35,7 +35,7 @@ Step 1: run the dry run.
 node scripts/install-skill.mjs
 ```
 
-Each line says `would copy`, `would replace` or `skip`, with the reason. A harness whose home folder does not exist is skipped, unless you name it with `--target`.
+Each line says `would copy`, `would replace` or `skip`, with the reason. A folder whose harness home folder does not exist is skipped, unless you name it with `--target`.
 
 Step 2: when the plan is right, apply it.
 
@@ -57,28 +57,28 @@ Without `--apply`, `--uninstall` is a dry run too.
 
 ## The folder of each harness
 
-The path is relative to your home folder.
+Seven harnesses use four folders. The installer makes one copy for each folder. The path is relative to your home folder.
 
-| Target id | Skill folder |
-|---|---|
-| `claude` | `.claude/skills/harness-dispatch` |
-| `codex` | `.codex/skills/harness-dispatch` |
-| `antigravity` | `.gemini/config/skills/harness-dispatch` |
-| `opencode` | `.config/opencode/skill/harness-dispatch` |
-| `zcode` | `.zcode/skills/harness-dispatch` |
-| `agents` | `.agents/skills/harness-dispatch` |
-| `cline` | The installer has no folder for this target. Cline reads `.agents/skills`, so the target `agents` serves Cline. |
+| Target id | Skill folder | Harnesses that read it |
+|---|---|---|
+| `claude` | `.claude/skills/harness-dispatch` | Claude Code |
+| `codex` | `.codex/skills/harness-dispatch` | Codex |
+| `antigravity` | `.gemini/config/skills/harness-dispatch` | Antigravity. It does not read the shared folder. |
+| `agents` | `.agents/skills/harness-dispatch` | ZCode, OpenCode, Cline and DeepSeek Harness (the shared folder) |
 
-The folders were seen on the operator's machine on 2026-11-20. The skill was run as a caller in Claude Code (desktop and CLI) and in Antigravity only.
+The ids `zcode`, `opencode`, `cline` and `deepseek` select the target `agents`. These harnesses have no folder of their own in the installer. The command `--target cline --target zcode` gives one step, for `.agents/skills/harness-dispatch`. The plan names the harnesses that read each folder.
 
-A check of the program code on 2026-11-20 gave these results. No model was called.
+ZCode, Cline, DeepSeek Harness and OpenCode also read a folder of their own (`.zcode/skills`, `.cline/skills`, `.dsh/skills`, `.config/opencode/skill`). The installer does not write to them. A second copy only makes the harness find the skill two times.
+OpenCode also reads `.claude/skills`. With the Claude Code copy installed, OpenCode finds the skill two times. It writes one warning about the duplicate name and uses one copy. The copies are identical, so this does no harm.
 
-- Cline (CLI 3.0.65) reads `.cline/skills` and `.agents/skills`.
-- DeepSeek Harness reads `.dsh/skills` and `.agents/skills`. The installer has no target for it. The target `agents` serves it.
-- ZCode and OpenCode read their own folder and `.agents/skills`. With the targets `zcode`, `opencode` and `agents` installed, each of them finds the skill two times. ZCode lists the skill two times. OpenCode writes a warning and uses one copy. The copies are identical, so this does no harm.
-- Antigravity reads `.gemini/config/skills`.
+The skill was seen to load in all of these harnesses on 2026-11-20 and 2026-11-21: Claude Code, Codex, Antigravity, ZCode, OpenCode, Cline and DeepSeek Harness. Each proof is output of the harness itself. The record is in [STATUS.md](STATUS.md). The skill was run as a caller in Claude Code (desktop and CLI), in Antigravity and in Codex only.
 
-All five harnesses were seen to find the skill on 2026-11-21: ZCode, Antigravity, Cline, OpenCode and DeepSeek Harness. The record is in [STATUS.md](STATUS.md).
+If your machine has copies from the old installer (version 0.2.2 and earlier), remove the two old copies by hand. The old installer wrote copies to the own folders of ZCode and OpenCode. Remove a folder only when it holds the marker file `.harness-dispatch-install.json`.
+
+```powershell
+Remove-Item -Recurse "$env:USERPROFILE/.zcode/skills/harness-dispatch"
+Remove-Item -Recurse "$env:USERPROFILE/.config/opencode/skill/harness-dispatch"
+```
 
 ## Let the caller run `node`
 

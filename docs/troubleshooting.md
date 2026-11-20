@@ -51,7 +51,7 @@ See [install](install.md).
 
 ## `hd` is not found
 
-The agent must run `node <folder>/scripts/hd.mjs`. The folder is `harness-dispatch` inside the skill folder of the harness. Check the install with the dry run of the installer ([install](install.md)).
+The agent must run `node <folder>/scripts/hd.mjs`. The folder is `harness-dispatch` inside the skill folder of the harness. Check the install with the dry run of the installer ([install](install.md)). ZCode, OpenCode, Cline and DeepSeek Harness read the shared folder `~/.agents/skills`.
 A shell that started before you installed Antigravity may not have `agy` on `PATH`. `hd` also looks in `%LOCALAPPDATA%\agy\bin`.
 
 ## The log file
